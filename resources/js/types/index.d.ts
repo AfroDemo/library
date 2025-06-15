@@ -36,8 +36,65 @@ export interface User {
     name: string;
     email: string;
     avatar?: string;
+    role: 'student' | 'staff' | 'librarian' | 'admin';
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
     [key: string]: unknown; // This allows for additional properties...
+}
+
+export interface Student {
+    id: number;
+    user_id: number;
+    student_id: string;
+    name: string;
+    email: string;
+}
+
+export interface Book {
+    id: number;
+    isbn: string;
+    title: string;
+    author: string;
+    available: boolean;
+}
+
+export interface Transaction {
+    id: number;
+    user_id: number;
+    book_id: number;
+    student_id: string;
+    book_title: string;
+    borrowed_at: string;
+    due_date: string;
+    returned_at?: string;
+}
+
+export interface PageProps {
+    auth: {
+        user: User;
+    };
+    errors: Record<string, string>;
+}
+
+export interface Breadcrumb {
+    title: string;
+    href: string;
+}
+
+export interface ToastMessage {
+    type: 'success' | 'error' | 'info';
+    message: string;
+    id: string;
+}
+
+export interface DashboardStats {
+    totalBooks?: number;
+    availableBooks?: number;
+    borrowedBooks?: number;
+    totalStudents?: number;
+    totalTransactions?: number;
+    overdueBooks?: number;
+    activeTransactions?: number;
+    myBorrowedBooks?: number;
 }
