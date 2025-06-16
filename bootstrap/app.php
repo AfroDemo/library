@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\EnsureIsLibrarian;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'librarian' => EnsureIsLibrarian::class,
+            'role' => CheckRole::class
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
