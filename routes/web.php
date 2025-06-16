@@ -20,35 +20,35 @@ Route::get('/', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::get('/students/{student_id}', [TransactionController::class, 'getStudent']);
+    Route::get('/students/{member_id}', [TransactionController::class, 'getStudent']);
     Route::get('/books/{isbn}', [TransactionController::class, 'getBook']);
     Route::post('/transactions', [TransactionController::class, 'store']);
 
-Route::middleware(['role:librarian,admin'])->group(function () {
-    // Librarian Dashboard
-    Route::get('/librarian/dashboard', function () {
-        return Inertia::render('librarian/dashboard');
-    })->name('librarian.dashboard');
+    Route::middleware(['role:librarian,admin'])->group(function () {
+        // Librarian Dashboard
+        Route::get('/librarian/dashboard', function () {
+            return Inertia::render('librarian/dashboard');
+        })->name('librarian.dashboard');
 
-    // Book Management
-    Route::resource('books', BookController::class);
+        // Book Management
+        Route::resource('books', BookController::class);
 
-    // Student Management
-    Route::resource('students', StudentController::class);
+        // Student Management
+        Route::resource('students', StudentController::class);
 
-    // Transaction Management
-    Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
+        // Transaction Management
+        Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
 
-    // Returns page
-    Route::get('/librarian/returns', function () {
-        return Inertia::render('librarian/returns');
-    })->name('librarian.returns');
+        // Returns page
+        Route::get('/librarian/returns', function () {
+            return Inertia::render('librarian/returns');
+        })->name('librarian.returns');
 
-    // Overdue books page
-    Route::get('/librarian/overdue', function () {
-        return Inertia::render('librarian/overdue');
-    })->name('librarian.overdue');
-});
+        // Overdue books page
+        Route::get('/librarian/overdue', function () {
+            return Inertia::render('librarian/overdue');
+        })->name('librarian.overdue');
+    });
 });
 
 require __DIR__ . '/settings.php';

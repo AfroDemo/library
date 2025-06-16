@@ -19,7 +19,7 @@ class StudentController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('student_id', 'like', "%{$search}%");
+                    ->orWhere('member_id', 'like', "%{$search}%");
             });
         }
 
@@ -39,7 +39,7 @@ class StudentController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'student_id' => 'required|string|unique:students,student_id',
+            'member_id' => 'required|string|unique:students,member_id',
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
@@ -56,7 +56,7 @@ class StudentController extends Controller
         // Create student record
         Student::create([
             'user_id' => $user->id,
-            'student_id' => $request->student_id,
+            'member_id' => $request->member_id,
         ]);
 
         return redirect()->route('students.index')
@@ -84,7 +84,7 @@ class StudentController extends Controller
     public function update(Request $request, Student $student)
     {
         $request->validate([
-            'student_id' => 'required|string|unique:students,student_id,' . $student->id,
+            'member_id' => 'required|string|unique:students,member_id,' . $student->id,
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $student->user_id,
         ]);
@@ -97,7 +97,7 @@ class StudentController extends Controller
 
         // Update student
         $student->update([
-            'student_id' => $request->student_id,
+            'member_id' => $request->member_id,
             'name' => $request->name,
             'email' => $request->email,
         ]);

@@ -11,9 +11,9 @@ use Inertia\Inertia;
 
 class TransactionController extends Controller
 {
-    public function getStudent(Request $request, $student_id)
+    public function getStudent(Request $request, $member_id)
     {
-        $student = Student::where('student_id', $student_id)->with('user')->first();
+        $student = Student::where('member_id', $member_id)->with('user')->first();
         if (!$student) {
             return response()->json(['error' => 'Student not found'], 404);
         }
@@ -32,11 +32,11 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'student_id' => 'required|exists:students,student_id',
+            'member_id' => 'required|exists:students,member_id',
             'isbn' => 'required|exists:books,isbn',
         ]);
 
-        $student = Student::where('student_id', $request->student_id)->first();
+        $student = Student::where('member_id', $request->member_id)->first();
         $book = Book::where('isbn', $request->isbn)->first();
 
         if (!$book->available) {

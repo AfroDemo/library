@@ -46,7 +46,7 @@ export interface User {
 export interface Student {
     id: number;
     user_id: number;
-    student_id: string;
+    member_id: string;
     name: string;
     email: string;
 }
@@ -63,7 +63,7 @@ export interface Transaction {
     id: number;
     user_id: number;
     book_id: number;
-    student_id: string;
+    member_id: string;
     book_title: string;
     borrowed_at: string;
     due_date: string;
