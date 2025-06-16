@@ -18,8 +18,8 @@ class StudentController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('student_id', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('student_id', 'like', "%{$search}%");
             });
         }
 
@@ -57,8 +57,6 @@ class StudentController extends Controller
         Student::create([
             'user_id' => $user->id,
             'student_id' => $request->student_id,
-            'name' => $request->name,
-            'email' => $request->email,
         ]);
 
         return redirect()->route('students.index')

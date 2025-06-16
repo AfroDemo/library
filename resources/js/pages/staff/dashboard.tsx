@@ -2,8 +2,8 @@
 import { useEffect } from "react"
 import { usePage, router } from "@inertiajs/react"
 import { Head } from "@inertiajs/react"
-import AppLayout from "../layouts/app-layout"
-import type { BreadcrumbItem, PageProps } from "../types"
+import AppLayout from "../../layouts/app-layout"
+import type { BreadcrumbItem, PageProps } from "../../types"
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
