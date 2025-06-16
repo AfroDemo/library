@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class TransactionController extends Controller
 {
@@ -52,5 +53,48 @@ class TransactionController extends Controller
         $book->update(['available' => false]);
 
         return response()->json(['message' => 'Book borrowed successfully', 'transaction' => $transaction]);
+    }
+
+    public function returnBook(Request $request, Transaction $transaction)
+    {
+        if ($transaction->returned_at) {
+            return response()->json(['error' => 'Book already returned'], 400);
+        }
+
+        $transaction->update([
+            'returned_at' => Carbon::now(),
+        ]);
+
+        // Make book available again
+        $transaction->book->update(['available' => true]);
+
+        return response()->json([
+            'message' => 'Book returned successfully',
+            'transaction' => $transaction->load(['user', 'book'])
+        ]);
+    }
+
+    public function index(Request $request)
+    {
+        $query = Transaction::with(['user', 'book'])
+            ->orderBy('borrowed_at', 'desc');
+
+        if ($request->has('status')) {
+            if ($request->status === 'active') {
+                $query->whereNull('returned_at');
+            } elseif ($request->status === 'returned') {
+                $query->whereNotNull('returned_at');
+            } elseif ($request->status === 'overdue') {
+                $query->whereNull('returned_at')
+                    ->where('due_date', '<', Carbon::today());
+            }
+        }
+
+        $transactions = $query->paginate(20);
+
+        return Inertia::render('librarian/transactions/index', [
+            'transactions' => $transactions,
+            'filters' => $request->only(['status']),
+        ]);
     }
 }

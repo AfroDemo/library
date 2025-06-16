@@ -17,6 +17,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
     Route::get('/students/{student_id}', [TransactionController::class, 'getStudent']);
     Route::get('/books/{isbn}', [TransactionController::class, 'getBook']);
     Route::post('/transactions', [TransactionController::class, 'store']);
