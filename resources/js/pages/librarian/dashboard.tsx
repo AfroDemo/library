@@ -46,73 +46,86 @@ export default function LibrarianDashboard() {
             inputRef.current.focus();
         }
 
-        // Check secure context
-        if (!isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            setCameraError('Camera access requires HTTPS. Please use https://localhost or configure HTTPS.');
-            showToast('error', 'Camera access requires HTTPS. Please use https://localhost.');
-        }
-
         // Initialize ZXing code reader
         codeReader.current = new BrowserMultiFormatReader(undefined, {
             formats: ['code_128', 'ean_13', 'qr_code'],
         });
 
-        // Load available cameras
-        codeReader.current
-            .listVideoInputDevices()
-            .then((devices) => {
-                setCameraDevices(devices);
-                if (devices.length > 0) {
-                    setSelectedCamera(devices[0].deviceId);
-                } else {
-                    setCameraError('No camera found. Please connect a camera or use manual input.');
-                    showToast('error', 'No camera found. Please connect a camera or use manual input.');
-                }
-            })
-            .catch((err) => {
-                console.error('Failed to list camera devices:', err);
-                let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
-                if (err.name === 'NotAllowedError') {
-                    errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
-                    showPermissionInstructions();
-                } else if (err.name === 'NotFoundError') {
-                    errorMessage = 'No camera found. Please connect a camera or use manual input.';
-                }
-                setCameraError(errorMessage);
-                showToast('error', errorMessage);
-            });
+        // Check camera access and load cameras
+        checkCameraAccess().then((hasAccess) => {
+            if (hasAccess) {
+                loadCameras();
+            }
+        });
 
         return () => {
-            if (codeReader.current) {
-                codeReader.current.reset();
-            }
+            stopScanning();
         };
     }, []);
 
-    useEffect(() => {
-        if (cameraError && inputRef.current) {
-            inputRef.current.focus();
-        } else if (inputRef.current) {
-            inputRef.current.focus();
+    const checkCameraAccess = async (): Promise<boolean> => {
+        if (!isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            setCameraError('Camera access requires HTTPS. Please use https://localhost or configure HTTPS.');
+            showToast('error', 'Camera access requires HTTPS. Please use https://localhost.');
+            return false;
         }
-    }, [scanStep, cameraError]);
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream.getTracks().forEach((track) => track.stop());
+            return true;
+        } catch (error: any) {
+            let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
+                showPermissionInstructions();
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'No camera found. Please connect a camera or use manual input.';
+            }
+            setCameraError(errorMessage);
+            showToast('error', errorMessage);
+            return false;
+        }
+    };
+
+    const loadCameras = async () => {
+        if (!codeReader.current) return;
+
+        try {
+            const devices = await codeReader.current.listVideoInputDevices();
+            setCameraDevices(devices);
+            if (devices.length > 0) {
+                setSelectedCamera(devices[0].deviceId); // Set default camera
+                // Do not auto-start scanning; wait for user action
+            } else {
+                setCameraError('No camera found. Please connect a camera or use manual input.');
+                showToast('error', 'No camera found. Please connect a camera or use manual input.');
+            }
+        } catch (err) {
+            console.error('Failed to list camera devices:', err);
+            setCameraError('Failed to access camera devices. Please use manual input.');
+            showToast('error', 'Failed to access camera devices.');
+        }
+    };
 
     const startScanning = async () => {
         if (!codeReader.current || !videoRef.current || !selectedCamera) {
             setCameraError('No camera selected. Please select a camera or use manual input.');
-            showToast('error', 'No camera selected');
-            return;
-        }
-
-        if (!isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            setCameraError('Camera access requires HTTPS. Please use https://localhost or configure HTTPS.');
-            showToast('error', 'Camera access requires HTTPS. Please use https://localhost.');
+            showToast('error', 'No camera selected. Please select a camera or use manual input.');
             return;
         }
 
         try {
             setIsScanning(true);
             setCameraError(null);
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: selectedCamera },
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+
             const SCAN_TIMEOUT = 30000;
             const timeoutId = setTimeout(() => {
                 stopScanning();
@@ -124,15 +137,13 @@ export default function LibrarianDashboard() {
                     setScanInput(result.getText());
                     handleScanSubmit({ preventDefault: () => {} } as React.FormEvent);
                     clearTimeout(timeoutId);
-                    codeReader.current?.reset();
-                    setIsScanning(false);
+                    stopScanning();
                 }
                 if (error && !error.message.includes('No MultiFormat Readers were able to detect the code')) {
                     console.error('Scanning error:', error);
                 }
             });
         } catch (error: any) {
-            clearTimeout(timeoutId);
             let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
             if (error.name === 'NotAllowedError') {
                 errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
@@ -149,9 +160,22 @@ export default function LibrarianDashboard() {
     const stopScanning = () => {
         if (codeReader.current) {
             codeReader.current.reset();
-            setIsScanning(false);
         }
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach((track) => track.stop());
+            videoRef.current.srcObject = null;
+        }
+        setIsScanning(false);
     };
+
+    useEffect(() => {
+        if (cameraError && inputRef.current) {
+            inputRef.current.focus();
+        } else if (inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [scanStep, cameraError]);
 
     const showPermissionInstructions = () => {
         const userAgent = navigator.userAgent.toLowerCase();
@@ -291,7 +315,7 @@ export default function LibrarianDashboard() {
                                     </h2>
                                 </div>
 
-                                {cameraDevices.length > 1 && (
+                                {cameraDevices.length > 0 && (
                                     <div className="mb-4">
                                         <label htmlFor="cameraSelect" className="block text-sm font-medium text-gray-700">
                                             Select Camera
@@ -302,6 +326,9 @@ export default function LibrarianDashboard() {
                                             onChange={(e) => setSelectedCamera(e.target.value)}
                                             className="w-full rounded-lg border border-gray-300 px-4 py-2"
                                         >
+                                            <option value="" disabled>
+                                                Select a camera
+                                            </option>
                                             {cameraDevices.map((device) => (
                                                 <option key={device.deviceId} value={device.deviceId}>
                                                     {device.label || `Camera ${device.deviceId}`}
