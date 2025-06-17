@@ -1,7 +1,7 @@
 'use client';
 
 import { Head, usePage } from '@inertiajs/react';
-import { BrowserMultiFormatReader } from '@zxing/library';
+import { BrowserMultiFormatReader, DecodeHintType } from '@zxing/library';
 import axios from 'axios';
 import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, TrendingUp, User } from 'lucide-react';
 import type React from 'react';
@@ -46,9 +46,13 @@ export default function LibrarianDashboard() {
             inputRef.current.focus();
         }
 
-        // Initialize ZXing code reader
-        codeReader.current = new BrowserMultiFormatReader(undefined, {
-            formats: ['code_128', 'ean_13', 'qr_code'],
+        // Initialize ZXing code reader with QR code optimization
+        const hints = new Map();
+        hints.set(DecodeHintType.TRY_HARDER, true); // Improve QR code detection
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, ['qr_code']); // Focus on QR codes for student IDs
+
+        codeReader.current = new BrowserMultiFormatReader(hints, {
+            formats: ['qr_code', 'ean_13'], // QR for student IDs, EAN-13 for books
         });
 
         // Check camera access and load cameras
@@ -96,7 +100,6 @@ export default function LibrarianDashboard() {
             setCameraDevices(devices);
             if (devices.length > 0) {
                 setSelectedCamera(devices[0].deviceId); // Set default camera
-                // Do not auto-start scanning; wait for user action
             } else {
                 setCameraError('No camera found. Please connect a camera or use manual input.');
                 showToast('error', 'No camera found. Please connect a camera or use manual input.');
@@ -106,6 +109,16 @@ export default function LibrarianDashboard() {
             setCameraError('Failed to access camera devices. Please use manual input.');
             showToast('error', 'Failed to access camera devices.');
         }
+    };
+
+    const parseStudentId = (scannedText: string): string | null => {
+        // Expected format: "202405016|22100533590050|2024/2025"
+        const parts = scannedText.split('|');
+        if (parts.length === 3) {
+            return parts[1]; // Return the second part (e.g., 22100533590050)
+        }
+        // If input doesn't match expected format, assume it's already the student_id
+        return scannedText;
     };
 
     const startScanning = async () => {
@@ -120,7 +133,12 @@ export default function LibrarianDashboard() {
             setCameraError(null);
 
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: selectedCamera },
+                video: {
+                    deviceId: selectedCamera,
+                    width: { ideal: 1280 }, // Higher resolution for better QR detection
+                    height: { ideal: 720 },
+                    facingMode: 'environment', // Prefer rear camera on mobile
+                },
             });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
@@ -134,13 +152,21 @@ export default function LibrarianDashboard() {
 
             codeReader.current.decodeFromVideoDevice(selectedCamera, videoRef.current, (result, error) => {
                 if (result) {
-                    setScanInput(result.getText());
+                    const scannedText = result.getText();
+                    console.log('Scanned QR code:', scannedText); // Debug log
+                    if (scanStep === 'student') {
+                        const studentId = parseStudentId(scannedText);
+                        setScanInput(studentId);
+                    } else {
+                        setScanInput(scannedText); // For book ISBNs, use raw scan
+                    }
                     handleScanSubmit({ preventDefault: () => {} } as React.FormEvent);
                     clearTimeout(timeoutId);
                     stopScanning();
                 }
                 if (error && !error.message.includes('No MultiFormat Readers were able to detect the code')) {
                     console.error('Scanning error:', error);
+                    showToast('error', 'Failed to detect QR code. Please try again or use manual input.');
                 }
             });
         } catch (error: any) {
@@ -223,7 +249,9 @@ export default function LibrarianDashboard() {
 
         try {
             if (scanStep === 'student') {
-                const response = await axios.get(`/api/students/${scanInput.trim()}`);
+                // Parse input in case user manually enters full QR code
+                const studentId = parseStudentId(scanInput.trim());
+                const response = await axios.get(`/api/students/${studentId}`);
                 setStudent(response.data);
                 setScanStep('book');
                 setScanInput('');
@@ -311,7 +339,7 @@ export default function LibrarianDashboard() {
                                 <div className="mb-6 flex items-center space-x-3">
                                     <Scan className="h-6 w-6 text-blue-600" />
                                     <h2 className="text-xl font-semibold text-gray-900">
-                                        {scanStep === 'student' ? 'Scan Student ID' : 'Scan Book ISBN'}
+                                        {scanStep === 'student' ? 'Scan Student ID QR Code' : 'Scan Book ISBN'}
                                     </h2>
                                 </div>
 
@@ -343,6 +371,7 @@ export default function LibrarianDashboard() {
                                         ref={videoRef}
                                         className={`w-full rounded-lg ${isScanning ? 'block' : 'hidden'}`}
                                         style={{ maxHeight: '300px' }}
+                                        autoPlay
                                     />
                                     {isScanning && (
                                         <div className="pointer-events-none absolute top-1/4 left-1/4 h-1/2 w-1/2 rounded-lg border-2 border-green-500 opacity-50"></div>
@@ -369,7 +398,7 @@ export default function LibrarianDashboard() {
                                             onChange={(e) => setScanInput(e.target.value)}
                                             placeholder={
                                                 cameraError
-                                                    ? 'Enter ID/ISBN manually...'
+                                                    ? 'Enter student ID or full QR code manually...'
                                                     : scanStep === 'student'
                                                       ? 'Scan or enter student ID...'
                                                       : 'Scan or enter book ISBN...'
@@ -469,7 +498,7 @@ export default function LibrarianDashboard() {
                                 ) : (
                                     <div className="py-8 text-center text-gray-500">
                                         <User className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-                                        <p>Scan a student ID to view information</p>
+                                        <p>Scan a student ID QR code to view information</p>
                                     </div>
                                 )}
                             </div>
