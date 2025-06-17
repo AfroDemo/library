@@ -16,8 +16,7 @@ class DashboardController extends Controller
             return Inertia::render('admin/dashboard');
         } else if ($user->role == "librarian") {
             return Inertia::render('librarian/dashboard');
-        } else if ($user->role == "student"||$user->role == "staff") {
-
+        } else if ($user->role == "student" || $user->role == "staff") {
             return Inertia::render('user/dashboard');
         }
     }

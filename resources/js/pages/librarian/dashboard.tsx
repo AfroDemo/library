@@ -2,6 +2,7 @@
 
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
+import jsQR from 'jsqr';
 import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, TrendingUp, User } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -25,25 +26,32 @@ export default function LibrarianDashboard() {
     const [student, setStudent] = useState<Student | null>(null);
     const [book, setBook] = useState<Book | null>(null);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [isScanning, setIsScanning] = useState(false);
+    const [cameraError, setCameraError] = useState<string | null>(null);
 
     // Dashboard stats
     const [stats, setStats] = useState<DashboardStats>({});
     const [isStatsLoading, setIsStatsLoading] = useState(true);
 
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
         fetchDashboardStats();
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
+        startCamera();
+        return () => stopCamera();
     }, []);
 
     useEffect(() => {
-        if (inputRef.current) {
+        if (isScanning && videoRef.current && canvasRef.current) {
+            scanFrame();
+        }
+        if (!isScanning && inputRef.current) {
             inputRef.current.focus();
         }
-    }, [scanStep]);
+    }, [isScanning, scanStep]);
 
     const fetchDashboardStats = async () => {
         try {
@@ -56,15 +64,65 @@ export default function LibrarianDashboard() {
         }
     };
 
+    const startCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' }, // Prefer rear camera on smartphones
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                streamRef.current = stream;
+                setIsScanning(true);
+                setCameraError(null);
+            }
+        } catch (error) {
+            console.error('Camera access error:', error);
+            setCameraError('Failed to access camera. Please allow camera permissions or use manual input.');
+            setIsScanning(false);
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+            setIsScanning(false);
+        }
+    };
+
+    const scanFrame = () => {
+        if (!videoRef.current || !canvasRef.current || !isScanning) return;
+
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (code) {
+                setScanInput(code.data);
+                setIsScanning(false);
+                stopCamera();
+                handleScanSubmit({ preventDefault: () => {} } as React.FormEvent);
+            } else {
+                requestAnimationFrame(scanFrame);
+            }
+        } else {
+            requestAnimationFrame(scanFrame);
+        }
+    };
+
     const showToast = (type: ToastMessage['type'], message: string) => {
         const id = Date.now().toString();
         const toast: ToastMessage = { type, message, id };
-
         setToasts((prev) => [...prev, toast]);
-
-        setTimeout(() => {
-            setToasts((prev) => prev.filter((t) => t.id !== id));
-        }, 5000);
+        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
     };
 
     const removeToast = (id: string) => {
@@ -84,6 +142,7 @@ export default function LibrarianDashboard() {
                 setScanStep('book');
                 setScanInput('');
                 showToast('success', `Student ${response.data.name} loaded successfully`);
+                startCamera();
             } else {
                 const bookResponse = await axios.get(`/books/${scanInput.trim()}`);
                 const bookData: Book = bookResponse.data;
@@ -91,24 +150,27 @@ export default function LibrarianDashboard() {
                 if (!bookData.available) {
                     showToast('error', 'This book is currently unavailable');
                     setScanInput('');
+                    startCamera();
                     return;
                 }
 
                 setBook(bookData);
 
+                // Adjust to match backend expectations
                 await axios.post('/transactions', {
-                    member_id: student?.member_id,
+                    student_id: student?.student_id, // Use student_id instead of member_id
                     isbn: bookData.isbn,
                 });
 
                 showToast('success', `Book "${bookData.title}" borrowed successfully`);
                 handleReset();
-                fetchDashboardStats(); // Refresh stats after transaction
+                fetchDashboardStats();
             }
         } catch (error: any) {
             const errorMessage = error.response?.data?.message || (scanStep === 'student' ? 'Student not found' : 'Book not found');
             showToast('error', errorMessage);
             setScanInput('');
+            startCamera();
         } finally {
             setIsLoading(false);
         }
@@ -119,8 +181,14 @@ export default function LibrarianDashboard() {
         setScanInput('');
         setStudent(null);
         setBook(null);
-        if (inputRef.current) {
-            inputRef.current.focus();
+        startCamera();
+    };
+
+    const toggleScanning = () => {
+        if (isScanning) {
+            stopCamera();
+        } else {
+            startCamera();
         }
     };
 
@@ -132,9 +200,8 @@ export default function LibrarianDashboard() {
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
                         <h1 className="mb-2 text-xl font-bold text-gray-900">Welcome, {auth.user.name}</h1>
-                        <p className="text-gray-600">Manage book transactions and assist library users with their borrowing needs.</p>
+                        <p className="text-gray-600">Manage book transactions using camera scanning or manual input.</p>
                     </div>
-
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
@@ -144,7 +211,6 @@ export default function LibrarianDashboard() {
                             <TrendingUp className="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
@@ -169,42 +235,72 @@ export default function LibrarianDashboard() {
                                     </h2>
                                 </div>
 
-                                <form onSubmit={handleScanSubmit} className="space-y-4">
-                                    <div className="relative">
-                                        <input
-                                            ref={inputRef}
-                                            type="text"
-                                            value={scanInput}
-                                            onChange={(e) => setScanInput(e.target.value)}
-                                            placeholder={scanStep === 'student' ? 'Scan or enter member ID...' : 'Scan or enter book ISBN...'}
-                                            className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            disabled={isLoading}
-                                        />
-                                        {isLoading && (
-                                            <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
-                                                <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
-                                            </div>
-                                        )}
+                                {cameraError && (
+                                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{cameraError}</div>
+                                )}
+
+                                {isScanning ? (
+                                    <div className="relative mb-4 aspect-video overflow-hidden rounded-lg">
+                                        <video ref={videoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                                        <canvas ref={canvasRef} className="hidden" />
                                     </div>
+                                ) : (
+                                    <form onSubmit={handleScanSubmit} className="space-y-4">
+                                        <div className="relative">
+                                            <input
+                                                ref={inputRef}
+                                                type="text"
+                                                value={scanInput}
+                                                onChange={(e) => setScanInput(e.target.value)}
+                                                placeholder={scanStep === 'student' ? 'Enter student ID...' : 'Enter book ISBN...'}
+                                                className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                disabled={isLoading}
+                                            />
+                                            {isLoading && (
+                                                <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
+                                                    <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </form>
+                                )}
 
-                                    <div className="flex space-x-3">
-                                        <button
-                                            type="submit"
-                                            disabled={!scanInput.trim() || isLoading}
-                                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            {isLoading ? 'Processing...' : 'Scan'}
-                                        </button>
-
+                                <div className="mt-4 flex space-x-3">
+                                    {isScanning ? (
                                         <button
                                             type="button"
-                                            onClick={handleReset}
-                                            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                                            onClick={toggleScanning}
+                                            className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:outline-none"
                                         >
-                                            <RefreshCw className="h-4 w-4" />
+                                            Stop Scanning
                                         </button>
-                                    </div>
-                                </form>
+                                    ) : (
+                                        <>
+                                            <button
+                                                type="submit"
+                                                onClick={handleScanSubmit}
+                                                disabled={!scanInput.trim() || isLoading}
+                                                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                {isLoading ? 'Processing...' : 'Submit'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={toggleScanning}
+                                                className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                                            >
+                                                Start Scanning
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleReset}
+                                        className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                    </button>
+                                </div>
 
                                 {/* Step Indicator */}
                                 <div className="mt-6 flex items-center justify-center space-x-4">
@@ -234,14 +330,13 @@ export default function LibrarianDashboard() {
                             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg">
                                 <div className="mb-4 flex items-center space-x-3">
                                     <User className="h-6 w-6 text-green-600" />
-                                    <h3 className="text-lg font-semibold text-gray-900">Student Information</h3>
+                                    <h3 className="text-lg font-semibold text-gray-900">User Information</h3>
                                 </div>
-
                                 {student ? (
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Student ID:</span>
-                                            <span className="font-medium">{student.member_id}</span>
+                                            <span className="font-medium">{student.student_id}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Name:</span>
@@ -261,7 +356,7 @@ export default function LibrarianDashboard() {
                                 ) : (
                                     <div className="py-8 text-center text-gray-500">
                                         <User className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-                                        <p>Scan a member ID to view information</p>
+                                        <p>Scan a student ID to view information</p>
                                     </div>
                                 )}
                             </div>
@@ -272,7 +367,6 @@ export default function LibrarianDashboard() {
                                     <BookOpen className="h-6 w-6 text-blue-600" />
                                     <h3 className="text-lg font-semibold text-gray-900">Book Information</h3>
                                 </div>
-
                                 {book ? (
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
@@ -331,7 +425,6 @@ export default function LibrarianDashboard() {
                             </div>
                         </div>
                     </a>
-
                     <a
                         href="/librarian/returns"
                         className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
@@ -344,7 +437,6 @@ export default function LibrarianDashboard() {
                             </div>
                         </div>
                     </a>
-
                     <a
                         href="/librarian/overdue"
                         className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
