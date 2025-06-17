@@ -30,6 +30,7 @@ export default function LibrarianDashboard() {
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
     const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
+    const [isSecureContext, setIsSecureContext] = useState<boolean>(window.isSecureContext);
 
     // Dashboard stats
     const [stats, setStats] = useState<DashboardStats>({});
@@ -45,9 +46,15 @@ export default function LibrarianDashboard() {
             inputRef.current.focus();
         }
 
+        // Check secure context
+        if (!isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            setCameraError('Camera access requires HTTPS. Please use https://localhost or configure HTTPS.');
+            showToast('error', 'Camera access requires HTTPS. Please use https://localhost.');
+        }
+
         // Initialize ZXing code reader
         codeReader.current = new BrowserMultiFormatReader(undefined, {
-            formats: ['code_128', 'ean_13', 'qr_code'], // Support common barcode formats
+            formats: ['code_128', 'ean_13', 'qr_code'],
         });
 
         // Load available cameras
@@ -57,11 +64,22 @@ export default function LibrarianDashboard() {
                 setCameraDevices(devices);
                 if (devices.length > 0) {
                     setSelectedCamera(devices[0].deviceId);
+                } else {
+                    setCameraError('No camera found. Please connect a camera or use manual input.');
+                    showToast('error', 'No camera found. Please connect a camera or use manual input.');
                 }
             })
             .catch((err) => {
                 console.error('Failed to list camera devices:', err);
-                setCameraError('No cameras found. Please connect a camera or use manual input.');
+                let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
+                if (err.name === 'NotAllowedError') {
+                    errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
+                    showPermissionInstructions();
+                } else if (err.name === 'NotFoundError') {
+                    errorMessage = 'No camera found. Please connect a camera or use manual input.';
+                }
+                setCameraError(errorMessage);
+                showToast('error', errorMessage);
             });
 
         return () => {
@@ -83,6 +101,12 @@ export default function LibrarianDashboard() {
         if (!codeReader.current || !videoRef.current || !selectedCamera) {
             setCameraError('No camera selected. Please select a camera or use manual input.');
             showToast('error', 'No camera selected');
+            return;
+        }
+
+        if (!isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            setCameraError('Camera access requires HTTPS. Please use https://localhost or configure HTTPS.');
+            showToast('error', 'Camera access requires HTTPS. Please use https://localhost.');
             return;
         }
 
@@ -358,7 +382,7 @@ export default function LibrarianDashboard() {
                                             className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
                                             aria-label="Reset scanning"
                                         >
-                                            <RefreshCw className="h-4 w-0" />
+                                            <RefreshCw className="h-4 w-4" />
                                         </button>
                                     </div>
                                 </form>
