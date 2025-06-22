@@ -10,25 +10,6 @@ use Illuminate\Http\Request;
 
 class LibrarianController extends Controller
 {
-    public function dashboardStats()
-    {
-        $today = Carbon::today();
-
-        $stats = [
-            'totalBooks' => Book::count(),
-            'availableBooks' => Book::where('available', true)->count(),
-            'borrowedBooks' => Book::where('available', false)->count(),
-            'totalStudents' => Student::count(),
-            'totalTransactions' => Transaction::whereDate('borrowed_at', $today)->count(),
-            'overdueBooks' => Transaction::whereNull('returned_at')
-                ->where('due_date', '<', $today)
-                ->count(),
-            'activeTransactions' => Transaction::whereNull('returned_at')->count(),
-        ];
-
-        return response()->json($stats);
-    }
-
     public function transactions(Request $request)
     {
         $query = Transaction::with(['user', 'book'])

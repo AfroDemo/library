@@ -1,8 +1,7 @@
 'use client';
 
-import { Head, usePage } from '@inertiajs/react';
-import { BrowserMultiFormatReader, DecodeHintType } from '@zxing/library';
-import axios from 'axios';
+import { Head, useForm, usePage } from '@inertiajs/react';
+import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, TrendingUp, User } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -16,113 +15,118 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/librarian/dashboard' },
 ];
 
+interface Props extends PageProps {
+    stats: DashboardStats;
+    student: Student | null;
+    book: Book | null;
+    scanStep: ScanStep;
+    errors: Record<string, string>;
+    success: string | null;
+}
+
 export default function LibrarianDashboard() {
-    const { auth } = usePage<PageProps>().props;
+    const { auth, stats, student: initialStudent, book: initialBook, scanStep: initialScanStep, errors, success } = usePage<Props>().props;
 
     // Scanning state
-    const [scanStep, setScanStep] = useState<ScanStep>('student');
     const [scanInput, setScanInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [student, setStudent] = useState<Student | null>(null);
-    const [book, setBook] = useState<Book | null>(null);
-    const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const [isScanning, setIsScanning] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
-    const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+    const [cameraDevices, setCameraDevices] = useState<{ id: string; label: string }[]>([]);
     const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
-    const [isSecureContext, setIsSecureContext] = useState<boolean>(window.isSecureContext);
+    const [isMobile, setIsMobile] = useState<boolean>(false);
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const lastToastTimeRef = useRef<number>(0); // To throttle error toasts
 
-    // Dashboard stats
-    const [stats, setStats] = useState<DashboardStats>({});
-    const [isStatsLoading, setIsStatsLoading] = useState(true);
+    // Inertia form
+    const { data, setData, post, processing, reset } = useForm({
+        scan_input: '',
+        scan_step: initialScanStep,
+    });
 
+    const scannerRef = useRef<Html5Qrcode | null>(null);
+    const scannerContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const codeReader = useRef<BrowserMultiFormatReader | null>(null);
 
     useEffect(() => {
-        fetchDashboardStats();
+        // Detect mobile device
+        const userAgent = navigator.userAgent.toLowerCase();
+        setIsMobile(/mobile|android|iphone|ipad|tablet/i.test(userAgent));
+
         if (inputRef.current) {
             inputRef.current.focus();
         }
 
-        // Initialize ZXing code reader with QR code optimization
-        const hints = new Map();
-        hints.set(DecodeHintType.TRY_HARDER, true); // Improve QR code detection
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, ['qr_code']); // Focus on QR codes for student IDs
+        // Initialize html5-qrcode
+        scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
 
-        codeReader.current = new BrowserMultiFormatReader(hints, {
-            formats: ['qr_code', 'ean_13'], // QR for student IDs, EAN-13 for books
-        });
+        // Load cameras
+        loadCameras();
 
-        // Check camera access and load cameras
-        checkCameraAccess().then((hasAccess) => {
-            if (hasAccess) {
-                loadCameras();
-            }
-        });
+        // Show success or error toasts
+        if (success) {
+            showToast('success', success);
+        }
+        if (errors.scan_input) {
+            showToast('error', errors.scan_input);
+        }
 
         return () => {
             stopScanning();
         };
-    }, []);
-
-    const checkCameraAccess = async (): Promise<boolean> => {
-        if (!isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            setCameraError('Camera access requires HTTPS. Please use https://localhost or configure HTTPS.');
-            showToast('error', 'Camera access requires HTTPS. Please use https://localhost.');
-            return false;
-        }
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            stream.getTracks().forEach((track) => track.stop());
-            return true;
-        } catch (error: any) {
-            let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
-            if (error.name === 'NotAllowedError') {
-                errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
-                showPermissionInstructions();
-            } else if (error.name === 'NotFoundError') {
-                errorMessage = 'No camera found. Please connect a camera or use manual input.';
-            }
-            setCameraError(errorMessage);
-            showToast('error', errorMessage);
-            return false;
-        }
-    };
+    }, [success, errors]);
 
     const loadCameras = async () => {
-        if (!codeReader.current) return;
-
         try {
-            const devices = await codeReader.current.listVideoInputDevices();
-            setCameraDevices(devices);
+            const devices = await Html5Qrcode.getCameras();
+            console.log('Available cameras:', devices);
+            const formattedDevices = devices.map((device) => ({
+                id: device.id,
+                label: device.label || `Camera ${device.id}`,
+            }));
+            setCameraDevices(formattedDevices);
+
             if (devices.length > 0) {
-                setSelectedCamera(devices[0].deviceId); // Set default camera
+                const rearCamera =
+                    devices.find(
+                        (device) =>
+                            device.label?.toLowerCase().includes('back') ||
+                            device.label?.toLowerCase().includes('rear') ||
+                            device.label?.toLowerCase().includes('environment'),
+                    ) || devices[0];
+                setSelectedCamera(rearCamera.id);
+                if (isMobile && devices.length === 1 && rearCamera.label?.toLowerCase().includes('front')) {
+                    setCameraError('Only front camera detected. For best results, use the rear camera or manual input.');
+                    showToast('info', 'Only front camera detected. Rear camera is recommended for scanning.');
+                }
             } else {
                 setCameraError('No camera found. Please connect a camera or use manual input.');
                 showToast('error', 'No camera found. Please connect a camera or use manual input.');
             }
-        } catch (err) {
-            console.error('Failed to list camera devices:', err);
-            setCameraError('Failed to access camera devices. Please use manual input.');
-            showToast('error', 'Failed to access camera devices.');
+        } catch (err: any) {
+            console.error('Camera access error:', err.name, err.message);
+            let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
+            if (err.name === 'NotAllowedError') {
+                errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
+                showPermissionInstructions();
+            } else if (err.name === 'NotFoundError') {
+                errorMessage = 'No camera found. Please connect a camera or use manual input.';
+            }
+            setCameraError(errorMessage);
+            showToast('error', errorMessage);
         }
     };
 
-    const parseStudentId = (scannedText: string): string | null => {
-        // Expected format: "202405016|22100533590050|2024/2025"
+    const parseStudentId = (scannedText: string): string => {
+        console.log('Parsing QR code:', scannedText);
         const parts = scannedText.split('|');
         if (parts.length === 3) {
-            return parts[1]; // Return the second part (e.g., 22100533590050)
+            return parts[1]; // e.g., 22100533590050
         }
-        // If input doesn't match expected format, assume it's already the student_id
         return scannedText;
     };
 
     const startScanning = async () => {
-        if (!codeReader.current || !videoRef.current || !selectedCamera) {
+        if (!scannerRef.current || !scannerContainerRef.current || !selectedCamera) {
             setCameraError('No camera selected. Please select a camera or use manual input.');
             showToast('error', 'No camera selected. Please select a camera or use manual input.');
             return;
@@ -132,50 +136,54 @@ export default function LibrarianDashboard() {
             setIsScanning(true);
             setCameraError(null);
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    deviceId: selectedCamera,
-                    width: { ideal: 1280 }, // Higher resolution for better QR detection
-                    height: { ideal: 720 },
-                    facingMode: 'environment', // Prefer rear camera on mobile
+            await scannerRef.current.start(
+                selectedCamera,
+                {
+                    fps: 15, // Increased for better QR code detection
+                    qrbox: { width: 300, height: 300 }, // Larger scan area
+                    aspectRatio: isMobile ? 1.777 : undefined,
+                    formatsToSupport: initialScanStep === 'student' ? ['QR_CODE'] : ['EAN_13', 'CODE_128', 'QR_CODE'],
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true, // Enable for better barcode detection
+                    },
                 },
-            });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-            }
-
-            const SCAN_TIMEOUT = 30000;
-            const timeoutId = setTimeout(() => {
-                stopScanning();
-                showToast('info', 'Scanning timed out. Please try again or use manual input.');
-            }, SCAN_TIMEOUT);
-
-            codeReader.current.decodeFromVideoDevice(selectedCamera, videoRef.current, (result, error) => {
-                if (result) {
-                    const scannedText = result.getText();
-                    console.log('Scanned QR code:', scannedText); // Debug log
-                    if (scanStep === 'student') {
-                        const studentId = parseStudentId(scannedText);
-                        setScanInput(studentId);
-                    } else {
-                        setScanInput(scannedText); // For book ISBNs, use raw scan
-                    }
+                (decodedText) => {
+                    console.log('Scanned text:', decodedText);
+                    const input = initialScanStep === 'student' ? parseStudentId(decodedText) : decodedText;
+                    setScanInput(input);
+                    setData({
+                        scan_input: input,
+                        scan_step: initialScanStep,
+                    });
                     handleScanSubmit({ preventDefault: () => {} } as React.FormEvent);
-                    clearTimeout(timeoutId);
                     stopScanning();
+                },
+                (errorMessage) => {
+                    // Throttle error toasts to once every 5 seconds
+                    const now = Date.now();
+                    if (now - lastToastTimeRef.current >= 5000 && !errorMessage.includes('No QR code found')) {
+                        console.error('Scanning error:', errorMessage);
+                    }
+                },
+            );
+
+            // Timeout to stop scanning after 15 seconds
+            setTimeout(() => {
+                if (isScanning) {
+                    stopScanning();
+                    showToast('info', 'Scanning timed out. Please try again or use manual input.');
                 }
-                if (error && !error.message.includes('No MultiFormat Readers were able to detect the code')) {
-                    console.error('Scanning error:', error);
-                    showToast('error', 'Failed to detect QR code. Please try again or use manual input.');
-                }
-            });
+            }, 15000);
         } catch (error: any) {
+            console.error('Start scanning error:', error.name, error.message);
             let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
             if (error.name === 'NotAllowedError') {
                 errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
                 showPermissionInstructions();
             } else if (error.name === 'NotFoundError') {
                 errorMessage = 'No camera found. Please connect a camera or use manual input.';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage = 'Camera constraints not supported. Please select a different camera or use manual input.';
             }
             setCameraError(errorMessage);
             showToast('error', errorMessage);
@@ -184,13 +192,15 @@ export default function LibrarianDashboard() {
     };
 
     const stopScanning = () => {
-        if (codeReader.current) {
-            codeReader.current.reset();
-        }
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach((track) => track.stop());
-            videoRef.current.srcObject = null;
+        if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
+            scannerRef.current
+                .stop()
+                .then(() => {
+                    setIsScanning(false);
+                })
+                .catch((err) => {
+                    console.error('Stop scanning error:', err);
+                });
         }
         setIsScanning(false);
     };
@@ -201,7 +211,7 @@ export default function LibrarianDashboard() {
         } else if (inputRef.current) {
             inputRef.current.focus();
         }
-    }, [scanStep, cameraError]);
+    }, [initialScanStep, cameraError]);
 
     const showPermissionInstructions = () => {
         const userAgent = navigator.userAgent.toLowerCase();
@@ -211,21 +221,9 @@ export default function LibrarianDashboard() {
         } else if (userAgent.includes('firefox')) {
             instructions += ' Go to Preferences > Privacy & Security > Permissions > Camera.';
         } else if (userAgent.includes('safari')) {
-            instructions += ' Go to Preferences > Websites > Camera.';
+            instructions += ' Go to Settings > Websites > Camera.';
         }
         showToast('info', instructions);
-    };
-
-    const fetchDashboardStats = async () => {
-        try {
-            const response = await axios.get('/api/librarian/dashboard-stats');
-            setStats(response.data);
-        } catch (error) {
-            console.error('Failed to fetch dashboard stats:', error);
-            showToast('error', 'Failed to load dashboard stats');
-        } finally {
-            setIsStatsLoading(false);
-        }
     };
 
     const showToast = (type: ToastMessage['type'], message: string) => {
@@ -243,59 +241,30 @@ export default function LibrarianDashboard() {
 
     const handleScanSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!scanInput.trim() || isLoading) return;
+        if (!data.scan_input.trim() || processing) return;
 
-        setIsLoading(true);
-
-        try {
-            if (scanStep === 'student') {
-                // Parse input in case user manually enters full QR code
-                const studentId = parseStudentId(scanInput.trim());
-                const response = await axios.get(`/api/students/${studentId}`);
-                setStudent(response.data);
-                setScanStep('book');
+        console.log('Submitting scan:', data);
+        post(route('librarian.scan'), {
+            onSuccess: () => {
+                reset();
                 setScanInput('');
-                showToast('success', `Student ${response.data.name} loaded successfully`);
-            } else {
-                const bookResponse = await axios.get(`/api/books/${scanInput.trim()}`);
-                const bookData: Book = bookResponse.data;
-
-                if (!bookData.available) {
-                    showToast('error', 'This book is currently unavailable');
-                    setScanInput('');
-                    return;
-                }
-
-                setBook(bookData);
-
-                await axios.post('/api/transactions', {
-                    student_id: student?.student_id,
-                    isbn: bookData.isbn,
-                });
-
-                showToast('success', `Book "${bookData.title}" borrowed successfully`);
-                handleReset();
-                fetchDashboardStats();
-            }
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.error || (scanStep === 'student' ? 'Student not found' : 'Book not found');
-            showToast('error', errorMessage);
-            setScanInput('');
-        } finally {
-            setIsLoading(false);
-            stopScanning();
-        }
+            },
+            onError: () => {
+                setScanInput('');
+            },
+        });
     };
 
     const handleReset = () => {
-        setScanStep('student');
+        reset();
         setScanInput('');
-        setStudent(null);
-        setBook(null);
         stopScanning();
         if (inputRef.current) {
             inputRef.current.focus();
         }
+        post(route('librarian.scan'), {
+            data: { scan_input: '', scan_step: 'student', reset: true },
+        });
     };
 
     return (
@@ -313,7 +282,7 @@ export default function LibrarianDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Today's Transactions</p>
-                                <p className="text-2xl font-bold text-gray-900">{isStatsLoading ? '...' : stats.totalTransactions || 0}</p>
+                                <p className="text-2xl font-bold text-gray-900">{stats.totalTransactions || 0}</p>
                             </div>
                             <TrendingUp className="h-8 w-8 text-blue-600" />
                         </div>
@@ -323,7 +292,7 @@ export default function LibrarianDashboard() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Overdue Books</p>
-                                <p className="text-2xl font-bold text-gray-900">{isStatsLoading ? '...' : stats.overdueBooks || 0}</p>
+                                <p className="text-2xl font-bold text-gray-900">{stats.overdueBooks || 0}</p>
                             </div>
                             <Clock className="h-8 w-8 text-red-600" />
                         </div>
@@ -339,7 +308,7 @@ export default function LibrarianDashboard() {
                                 <div className="mb-6 flex items-center space-x-3">
                                     <Scan className="h-6 w-6 text-blue-600" />
                                     <h2 className="text-xl font-semibold text-gray-900">
-                                        {scanStep === 'student' ? 'Scan Student ID QR Code' : 'Scan Book ISBN'}
+                                        {initialScanStep === 'student' ? 'Scan Student ID QR Code' : 'Scan Book ISBN'}
                                     </h2>
                                 </div>
 
@@ -358,8 +327,12 @@ export default function LibrarianDashboard() {
                                                 Select a camera
                                             </option>
                                             {cameraDevices.map((device) => (
-                                                <option key={device.deviceId} value={device.deviceId}>
-                                                    {device.label || `Camera ${device.deviceId}`}
+                                                <option key={device.id} value={device.id}>
+                                                    {device.label.toLowerCase().includes('back') ||
+                                                    device.label.toLowerCase().includes('rear') ||
+                                                    device.label.toLowerCase().includes('environment')
+                                                        ? 'Rear Camera'
+                                                        : 'Front Camera'}
                                                 </option>
                                             ))}
                                         </select>
@@ -367,17 +340,16 @@ export default function LibrarianDashboard() {
                                 )}
 
                                 <div className="relative mb-4">
-                                    <video
-                                        ref={videoRef}
+                                    <div
+                                        id="scanner-container"
+                                        ref={scannerContainerRef}
                                         className={`w-full rounded-lg ${isScanning ? 'block' : 'hidden'}`}
-                                        style={{ maxHeight: '300px' }}
-                                        autoPlay
+                                        style={{ maxHeight: isMobile ? '50vh' : '300px' }}
                                     />
-                                    {isScanning && (
-                                        <div className="pointer-events-none absolute top-1/4 left-1/4 h-1/2 w-1/2 rounded-lg border-2 border-green-500 opacity-50"></div>
-                                    )}
                                     {!isScanning && (
-                                        <div className="flex h-[300px] w-full items-center justify-center rounded-lg bg-gray-100">
+                                        <div
+                                            className={`flex h-[${isMobile ? '50vh' : '300px'}] w-full items-center justify-center rounded-lg bg-gray-100`}
+                                        >
                                             {cameraError ? (
                                                 <p className="px-4 text-center text-red-600" id="camera-error">
                                                     {cameraError}
@@ -395,19 +367,22 @@ export default function LibrarianDashboard() {
                                             ref={inputRef}
                                             type="text"
                                             value={scanInput}
-                                            onChange={(e) => setScanInput(e.target.value)}
+                                            onChange={(e) => {
+                                                setScanInput(e.target.value);
+                                                setData('scan_input', e.target.value);
+                                            }}
                                             placeholder={
                                                 cameraError
                                                     ? 'Enter student ID or full QR code manually...'
-                                                    : scanStep === 'student'
+                                                    : initialScanStep === 'student'
                                                       ? 'Scan or enter student ID...'
                                                       : 'Scan or enter book ISBN...'
                                             }
                                             className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            disabled={isLoading}
+                                            disabled={processing}
                                             aria-describedby={cameraError ? 'camera-error' : undefined}
                                         />
-                                        {isLoading && (
+                                        {processing && (
                                             <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
                                                 <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
                                             </div>
@@ -419,18 +394,18 @@ export default function LibrarianDashboard() {
                                             type="button"
                                             onClick={isScanning ? stopScanning : startScanning}
                                             className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                                            disabled={isLoading || !selectedCamera}
+                                            disabled={processing || !selectedCamera}
                                             aria-label={isScanning ? 'Stop scanning' : 'Start scanning'}
                                         >
                                             {isScanning ? 'Stop Scanning' : 'Start Scanning'}
                                         </button>
                                         <button
                                             type="submit"
-                                            disabled={!scanInput.trim() || isLoading}
+                                            disabled={!data.scan_input.trim() || processing}
                                             className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                             aria-label="Submit manual scan"
                                         >
-                                            {isLoading ? 'Processing...' : 'Manual Scan'}
+                                            {processing ? 'Processing...' : 'Manual Scan'}
                                         </button>
                                         <button
                                             type="button"
@@ -447,18 +422,20 @@ export default function LibrarianDashboard() {
                                 <div className="mt-6 flex items-center justify-center space-x-4">
                                     <div
                                         className={`flex items-center space-x-2 rounded-full px-3 py-1 text-sm ${
-                                            scanStep === 'student' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                                            initialScanStep === 'student' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                                         }`}
                                     >
-                                        <span className={`h-2 w-2 rounded-full ${scanStep === 'student' ? 'bg-blue-600' : 'bg-green-600'}`}></span>
+                                        <span
+                                            className={`h-2 w-2 rounded-full ${initialScanStep === 'student' ? 'bg-blue-600' : 'bg-green-600'}`}
+                                        ></span>
                                         <span>Step 1: Student ID</span>
                                     </div>
                                     <div
                                         className={`flex items-center space-x-2 rounded-full px-3 py-1 text-sm ${
-                                            scanStep === 'book' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                                            initialScanStep === 'book' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
                                         }`}
                                     >
-                                        <span className={`h-2 w-2 rounded-full ${scanStep === 'book' ? 'bg-blue-600' : 'bg-gray-400'}`}></span>
+                                        <span className={`h-2 w-2 rounded-full ${initialScanStep === 'book' ? 'bg-blue-600' : 'bg-gray-400'}`}></span>
                                         <span>Step 2: Book ISBN</span>
                                     </div>
                                 </div>
@@ -474,19 +451,19 @@ export default function LibrarianDashboard() {
                                     <h3 className="text-lg font-semibold text-gray-900">Student Information</h3>
                                 </div>
 
-                                {student ? (
+                                {initialStudent ? (
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Student ID:</span>
-                                            <span className="font-medium">{student.student_id}</span>
+                                            <span className="font-medium">{initialStudent.student_id}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Name:</span>
-                                            <span className="font-medium">{student.name}</span>
+                                            <span className="font-medium">{initialStudent.name}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Email:</span>
-                                            <span className="font-medium">{student.email}</span>
+                                            <span className="font-medium">{initialStudent.email}</span>
                                         </div>
                                         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3">
                                             <div className="flex items-center space-x-2">
@@ -510,34 +487,34 @@ export default function LibrarianDashboard() {
                                     <h3 className="text-lg font-semibold text-gray-900">Book Information</h3>
                                 </div>
 
-                                {book ? (
+                                {initialBook ? (
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">ISBN:</span>
-                                            <span className="font-medium">{book.isbn}</span>
+                                            <span className="font-medium">{initialBook.isbn}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Title:</span>
-                                            <span className="font-medium">{book.title}</span>
+                                            <span className="font-medium">{initialBook.title}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Author:</span>
-                                            <span className="font-medium">{book.author}</span>
+                                            <span className="font-medium">{initialBook.author}</span>
                                         </div>
                                         <div className="mt-4">
                                             <div
                                                 className={`rounded-lg border p-3 ${
-                                                    book.available ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                                                    initialBook.available ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
                                                 }`}
                                             >
                                                 <div className="flex items-center space-x-2">
-                                                    {book.available ? (
+                                                    {initialBook.available ? (
                                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                                     ) : (
                                                         <AlertCircle className="h-4 w-4 text-red-600" />
                                                     )}
-                                                    <span className={`text-sm ${book.available ? 'text-green-800' : 'text-red-800'}`}>
-                                                        {book.available ? 'Available for borrowing' : 'Currently unavailable'}
+                                                    <span className={`text-sm ${initialBook.available ? 'text-green-800' : 'text-red-800'}`}>
+                                                        {initialBook.available ? 'Available for borrowing' : 'Currently unavailable'}
                                                     </span>
                                                 </div>
                                             </div>

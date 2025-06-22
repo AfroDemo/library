@@ -11,12 +11,6 @@ Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
-// Route::middleware(['auth', 'verified'])->group(function () {
-//     Route::get('dashboard', function () {
-//         return Inertia::render('dashboard');
-//     })->name('dashboard');
-// });
-
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -25,10 +19,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/transactions', [TransactionController::class, 'store']);
 
     Route::middleware(['role:librarian,admin'])->group(function () {
-        // Librarian Dashboard
-        Route::get('/librarian/dashboard', function () {
-            return Inertia::render('librarian/dashboard');
-        })->name('librarian.dashboard');
+        Route::post('/dashboard/scan', [DashboardController::class, 'handleScan'])->name('librarian.scan');
+        Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
+        Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+        Route::get('/books', [BookController::class, 'index'])->name('books.index');
 
         // Book Management
         Route::resource('books', BookController::class);
