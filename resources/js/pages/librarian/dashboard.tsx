@@ -27,6 +27,9 @@ interface Props extends PageProps {
 export default function LibrarianDashboard() {
     const { auth, stats, student: initialStudent, book: initialBook, scanStep: initialScanStep, errors, success } = usePage<Props>().props;
 
+    // Debugging: Log props on every render
+    console.log('Received props:', { scanStep: initialScanStep, student: initialStudent, success });
+
     // Scanning state
     const [scanInput, setScanInput] = useState('');
     const [isScanning, setIsScanning] = useState(false);
@@ -35,7 +38,7 @@ export default function LibrarianDashboard() {
     const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
     const [isMobile, setIsMobile] = useState<boolean>(false);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
-    const lastToastTimeRef = useRef<number>(0); // To throttle error toasts
+    const lastToastTimeRef = useRef<number>(0);
 
     // Inertia form
     const { data, setData, post, processing, reset } = useForm({
@@ -47,7 +50,7 @@ export default function LibrarianDashboard() {
     const scannerContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Sync form's scan_step with initialScanStep when it changes
+    // Sync form's scan_step with initialScanStep
     useEffect(() => {
         console.log('initialScanStep changed:', initialScanStep);
         setData('scan_step', initialScanStep);
@@ -68,7 +71,7 @@ export default function LibrarianDashboard() {
         // Load cameras
         loadCameras();
 
-        // Show success or error toasts
+        // Show toasts
         if (success) {
             showToast('success', success);
         }
@@ -126,7 +129,7 @@ export default function LibrarianDashboard() {
         console.log('Parsing QR code:', scannedText);
         const parts = scannedText.split('|');
         if (parts.length === 3) {
-            return parts[1]; // e.g., 22100533590050
+            return parts[1];
         }
         return scannedText;
     };
@@ -254,9 +257,11 @@ export default function LibrarianDashboard() {
             onSuccess: () => {
                 reset();
                 setScanInput('');
+                setData('scan_step', initialScanStep); // Ensure scan_step is synced
             },
             onError: () => {
                 setScanInput('');
+                reset();
             },
         });
     };
@@ -276,6 +281,10 @@ export default function LibrarianDashboard() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Librarian Dashboard" />
+            {/* Debug Props */}
+            <div className="debug" style={{ position: 'fixed', top: '10px', left: '10px', background: 'white', padding: '10px', zIndex: 1000 }}>
+                <pre>{JSON.stringify({ initialScanStep, data, student: initialStudent }, null, 2)}</pre>
+            </div>
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 {/* Welcome & Quick Stats */}
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">

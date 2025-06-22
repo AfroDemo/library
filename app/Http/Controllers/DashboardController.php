@@ -9,7 +9,6 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\FacadesLog;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -17,6 +16,9 @@ class DashboardController extends Controller
     public function index()
     {
         $user = Auth::user();
+
+        // Log session data for debugging
+        Log::info('Session data on index:', session()->all());
 
         if ($user->role === 'admin') {
             return Inertia::render('admin/dashboard');
@@ -41,7 +43,7 @@ class DashboardController extends Controller
                 'stats' => $stats,
                 'student' => session('student', null),
                 'book' => session('book', null),
-                'scanStep' => session('scan_step', 'student'), // Changed to scan_step
+                'scanStep' => session('scan_step', 'student'),
                 'errors' => session('errors', []),
                 'success' => session('success', null),
             ]);
@@ -63,6 +65,8 @@ class DashboardController extends Controller
         $scanStep = $request->input('scan_step');
         $reset = $request->boolean('reset', false);
 
+        // Log session data before processing
+        Log::info('Session data on handleScan:', session()->all());
         Log::info('Processing scan:', ['input' => $scanInput, 'step' => $scanStep, 'reset' => $reset]);
 
         if ($reset) {
