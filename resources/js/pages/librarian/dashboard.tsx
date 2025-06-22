@@ -47,6 +47,12 @@ export default function LibrarianDashboard() {
     const scannerContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // Sync form's scan_step with initialScanStep when it changes
+    useEffect(() => {
+        console.log('initialScanStep changed:', initialScanStep);
+        setData('scan_step', initialScanStep);
+    }, [initialScanStep, setData]);
+
     useEffect(() => {
         // Detect mobile device
         const userAgent = navigator.userAgent.toLowerCase();
@@ -139,12 +145,12 @@ export default function LibrarianDashboard() {
             await scannerRef.current.start(
                 selectedCamera,
                 {
-                    fps: 15, // Increased for better QR code detection
-                    qrbox: { width: 300, height: 300 }, // Larger scan area
+                    fps: 15,
+                    qrbox: { width: 300, height: 300 },
                     aspectRatio: isMobile ? 1.777 : undefined,
                     formatsToSupport: initialScanStep === 'student' ? ['QR_CODE'] : ['EAN_13', 'CODE_128', 'QR_CODE'],
                     experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true, // Enable for better barcode detection
+                        useBarCodeDetectorIfSupported: true,
                     },
                 },
                 (decodedText) => {
@@ -159,15 +165,15 @@ export default function LibrarianDashboard() {
                     stopScanning();
                 },
                 (errorMessage) => {
-                    // Throttle error toasts to once every 5 seconds
                     const now = Date.now();
                     if (now - lastToastTimeRef.current >= 5000 && !errorMessage.includes('No QR code found')) {
                         console.error('Scanning error:', errorMessage);
+                        showToast('error', `Failed to detect code: ${errorMessage}. Please try again.`);
+                        lastToastTimeRef.current = now;
                     }
                 },
             );
 
-            // Timeout to stop scanning after 15 seconds
             setTimeout(() => {
                 if (isScanning) {
                     stopScanning();

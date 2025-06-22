@@ -35,11 +35,13 @@ class DashboardController extends Controller
                 'activeTransactions' => Transaction::whereNull('returned_at')->count(),
             ];
 
+            Log::info('Rendering dashboard with scan_step:', ['scan_step' => session('scan_step', 'student')]);
+
             return Inertia::render('librarian/dashboard', [
                 'stats' => $stats,
                 'student' => session('student', null),
                 'book' => session('book', null),
-                'scanStep' => session('scanStep', 'student'),
+                'scanStep' => session('scan_step', 'student'), // Changed to scan_step
                 'errors' => session('errors', []),
                 'success' => session('success', null),
             ]);
@@ -64,6 +66,7 @@ class DashboardController extends Controller
         Log::info('Processing scan:', ['input' => $scanInput, 'step' => $scanStep, 'reset' => $reset]);
 
         if ($reset) {
+            Log::info('Resetting scan state');
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
                 'student' => null,
@@ -75,12 +78,14 @@ class DashboardController extends Controller
         if ($scanStep === 'student') {
             Log::info('Parsing QR code:', ['input' => $scanInput]);
             $studentId = $this->parseStudentId($scanInput);
-            $student = Student::where('member_id', $studentId)->with("user")->first();
+            $student = Student::where('member_id', $studentId)->with('user')->first();
 
             if (!$student) {
+                Log::error('Student not found:', ['student_id' => $studentId]);
                 return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
             }
 
+            Log::info('Student found, setting scan_step to book:', ['student_id' => $studentId]);
             return redirect()->route('dashboard')->with([
                 'student' => [
                     'student_id' => $student->member_id,
@@ -96,22 +101,26 @@ class DashboardController extends Controller
         $book = Book::where('isbn', $scanInput)->first();
 
         if (!$book) {
+            Log::error('Book not found:', ['isbn' => $scanInput]);
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Book not found']);
         }
 
         if (!$book->available) {
+            Log::error('Book not available:', ['isbn' => $scanInput]);
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Book is not available']);
         }
 
         $student = session('student');
 
         if (!$student) {
+            Log::error('No student in session');
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Please scan student ID first']);
         }
 
         $studentModel = Student::where('member_id', $student['student_id'])->first();
 
         if (!$studentModel) {
+            Log::error('Student not found in database:', ['student_id' => $student['student_id']]);
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
         }
 
@@ -125,6 +134,7 @@ class DashboardController extends Controller
 
         $book->update(['available' => false]);
 
+        Log::info('Transaction created, resetting scan_step to student');
         return redirect()->route('dashboard')->with([
             'scan_step' => 'student',
             'student' => null,
