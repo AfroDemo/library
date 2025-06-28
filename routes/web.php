@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StudentController;
@@ -35,20 +36,44 @@ Route::middleware(['auth'])->group(function () {
         // Transaction Management
         Route::post('/transactions', [TransactionController::class, 'store'])->name('librarian.confirm-borrow');
 
-        // Returns page (controller provides active transactions)
+        // Returns page
         Route::get('/librarian/returns', [TransactionController::class, 'returnsPage'])->name('librarian.returns');
 
-        // Process a return (POST)
+        // Process a return
         Route::post('/librarian/returns/process', [TransactionController::class, 'processReturn'])->name('librarian.returns.process');
 
-        // Overdue books page (controller provides overdue transactions)
+        // Overdue books page
         Route::get('/librarian/overdue', [TransactionController::class, 'overduePage'])->name('librarian.overdue');
 
         // Send reminders for overdue books
         Route::post('/librarian/overdue/send-reminders', [TransactionController::class, 'sendOverdueReminders'])->name('librarian.overdue.sendReminders');
 
-        //Transactions
+        // Transactions
         Route::get('/librarian/transactions', [TransactionController::class, 'index'])->name('librarian.transactions');
+    });
+
+    Route::middleware(['role:admin'])->prefix('admin')->group(function () {
+        // Books Management
+        Route::get('/books', [AdminController::class, 'booksIndex'])->name('admin.books.index');
+        Route::post('/books', [AdminController::class, 'booksStore'])->name('admin.books.store');
+        Route::put('/books/{book}', [AdminController::class, 'booksUpdate'])->name('admin.books.update');
+        Route::delete('/books/{book}', [AdminController::class, 'booksDestroy'])->name('admin.books.destroy');
+
+        // Users Management
+        Route::get('/users', [AdminController::class, 'usersIndex'])->name('admin.users.index');
+        Route::post('/users', [AdminController::class, 'usersStore'])->name('admin.users.store');
+        Route::put('/users/{user}', [AdminController::class, 'usersUpdate'])->name('admin.users.update');
+        Route::delete('/users/{user}', [AdminController::class, 'usersDestroy'])->name('admin.users.destroy');
+
+        // Librarians Management
+        Route::get('/librarians', [AdminController::class, 'librariansIndex'])->name('admin.librarians.index');
+        Route::post('/librarians', [AdminController::class, 'librariansStore'])->name('admin.librarians.store');
+        Route::put('/librarians/{user}', [AdminController::class, 'librariansUpdate'])->name('admin.librarians.update');
+        Route::delete('/librarians/{user}', [AdminController::class, 'librariansDestroy'])->name('admin.librarians.destroy');
+
+        // Settings Management
+        Route::get('/settings', [AdminController::class, 'settingsIndex'])->name('admin.settings.index');
+        Route::post('/settings', [AdminController::class, 'settingsUpdate'])->name('admin.settings.update');
     });
 });
 
