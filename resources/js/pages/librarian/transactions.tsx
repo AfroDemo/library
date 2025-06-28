@@ -1,45 +1,81 @@
 'use client';
 import { Head, router } from '@inertiajs/react';
-import axios from 'axios';
-import { AlertTriangle, BookOpen, Calendar, CheckCircle, Clock, Download, Search, User } from 'lucide-react';
+import { AlertTriangle, BookOpen, Calendar, CheckCircle, Clock, Download, Search, User as UserIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { BreadcrumbItem, Transaction } from '../../types';
-
+import type { Book, BreadcrumbItem, Transaction } from '../../types';
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Librarian', href: '/librarian' },
     { title: 'Transactions', href: '/librarian/transactions' },
 ];
 
-export default function LibrarianTransactions() {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+// Type for paginated response
+interface PaginatedTransactions {
+    current_page: number;
+    data: TransactionApi[];
+    first_page_url: string;
+    from: number;
+    last_page: number;
+    last_page_url: string;
+    links: { url: string | null; label: string; active: boolean }[];
+    next_page_url: string | null;
+    path: string;
+    per_page: number;
+    prev_page_url: string | null;
+    to: number;
+    total: number;
+}
+
+// Transaction as returned from API
+interface TransactionApi extends Transaction {
+    user: {
+        id: number;
+        name: string;
+        email: string;
+        email_verified_at: string | null;
+        role: string;
+        created_at: string;
+        updated_at: string;
+    };
+    book: Book;
+}
+
+// Type for display in table and filtering
+type TransactionDisplay = Transaction & {
+    student_name: string;
+    member_id: string;
+    book_title: string;
+    book_isbn: string;
+};
+
+// Props for the page
+interface LibrarianTransactionsProps {
+    transactions: PaginatedTransactions;
+}
+
+export default function LibrarianTransactions({ transactions }: LibrarianTransactionsProps) {
+    // Map API data to flat structure for filtering and display
+    const mappedTransactions: TransactionDisplay[] = transactions.data.map((t) => ({
+        ...t,
+        student_name: t.user?.name || '',
+        member_id: t.user_id ? t.user_id.toString() : '',
+        book_title: t.book?.title || '',
+        book_isbn: t.book?.isbn || '',
+    }));
+
+    const [filteredTransactions, setFilteredTransactions] = useState<TransactionDisplay[]>(mappedTransactions);
+    const [isLoading, setIsLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [dateFilter, setDateFilter] = useState('all');
 
     useEffect(() => {
-        fetchTransactions();
-    }, []);
-
-    useEffect(() => {
         filterTransactions();
+        // eslint-disable-next-line
     }, [transactions, searchTerm, statusFilter, dateFilter]);
 
-    const fetchTransactions = async () => {
-        try {
-            const response = await axios.get('/api/librarian/transactions');
-            setTransactions(response.data);
-        } catch (error) {
-            console.error('Failed to fetch transactions:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const filterTransactions = () => {
-        let filtered = [...transactions];
+    function filterTransactions() {
+        let filtered = [...mappedTransactions];
 
         // Search filter
         if (searchTerm) {
@@ -81,17 +117,17 @@ export default function LibrarianTransactions() {
         }
 
         setFilteredTransactions(filtered);
-    };
+    }
 
-    const formatDate = (dateString: string) => {
+    function formatDate(dateString: string) {
         return new Date(dateString).toLocaleDateString();
-    };
+    }
 
-    const isOverdue = (transaction: Transaction) => {
+    function isOverdue(transaction: TransactionDisplay) {
         return !transaction.returned_at && new Date(transaction.due_date) < new Date();
-    };
+    }
 
-    const getStatusBadge = (transaction: Transaction) => {
+    function getStatusBadge(transaction: TransactionDisplay) {
         if (transaction.returned_at) {
             return (
                 <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
@@ -114,9 +150,9 @@ export default function LibrarianTransactions() {
                 </span>
             );
         }
-    };
+    }
 
-    const exportTransactions = () => {
+    function exportTransactions() {
         const csvContent = [
             ['Student ID', 'Student Name', 'Book ISBN', 'Book Title', 'Borrowed Date', 'Due Date', 'Returned Date', 'Status'],
             ...filteredTransactions.map((t) => [
@@ -139,7 +175,7 @@ export default function LibrarianTransactions() {
         a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
         window.URL.revokeObjectURL(url);
-    };
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -253,7 +289,7 @@ export default function LibrarianTransactions() {
                                         <tr key={transaction.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    <User className="mr-3 h-8 w-8 text-gray-400" />
+                                                    <UserIcon className="mr-3 h-8 w-8 text-gray-400" />
                                                     <div>
                                                         <div className="text-sm font-medium text-gray-900">{transaction.student_name}</div>
                                                         <div className="text-sm text-gray-500">{transaction.member_id}</div>
