@@ -1,35 +1,38 @@
 'use client';
 import { Head } from '@inertiajs/react';
-import axios from 'axios';
 import { AlertTriangle, BookOpen, Calendar, Clock, Download, Mail, Phone, User } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { BreadcrumbItem, Transaction } from '../../types';
+import type { BreadcrumbItem } from '../../types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Librarian', href: '/librarian' },
     { title: 'Overdue Books', href: '/librarian/overdue' },
 ];
 
-export default function LibrarianOverdue() {
-    const [overdueTransactions, setOverdueTransactions] = useState<Transaction[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+import { router } from '@inertiajs/react';
+
+// Transaction type for display (with derived fields)
+type OverdueTransaction = {
+    id: number;
+    borrowed_at: string;
+    due_date: string;
+    returned_at?: string;
+    student_name: string;
+    member_id: string;
+    student_email?: string;
+    student_phone?: string;
+    book_title: string;
+    book_isbn: string;
+};
+
+interface OverduePageProps {
+    overdueTransactions: OverdueTransaction[];
+}
+
+export default function LibrarianOverdue(props: OverduePageProps) {
+    const { overdueTransactions } = props;
     const [selectedTransactions, setSelectedTransactions] = useState<number[]>([]);
-
-    useEffect(() => {
-        fetchOverdueTransactions();
-    }, []);
-
-    const fetchOverdueTransactions = async () => {
-        try {
-            const response = await axios.get('/api/librarian/overdue-transactions');
-            setOverdueTransactions(response.data);
-        } catch (error) {
-            console.error('Failed to fetch overdue transactions:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString();
@@ -60,22 +63,25 @@ export default function LibrarianOverdue() {
         }
     };
 
-    const sendReminders = async () => {
-        if (selectedTransactions.length === 0) {
+    const sendReminders = (ids?: number[]) => {
+        const transactionIds = ids || selectedTransactions;
+        if (transactionIds.length === 0) {
             alert('Please select transactions to send reminders for.');
             return;
         }
-
-        try {
-            await axios.post('/api/librarian/send-reminders', {
-                transaction_ids: selectedTransactions,
-            });
-            alert(`Reminder emails sent for ${selectedTransactions.length} transactions.`);
-            setSelectedTransactions([]);
-        } catch (error) {
-            console.error('Failed to send reminders:', error);
-            alert('Failed to send reminders. Please try again.');
-        }
+        router.post(
+            route('librarian.overdue.sendReminders'),
+            { transaction_ids: transactionIds },
+            {
+                onSuccess: () => {
+                    alert(`Reminder emails sent for ${transactionIds.length} transactions.`);
+                    setSelectedTransactions([]);
+                },
+                onError: () => {
+                    alert('Failed to send reminders. Please try again.');
+                },
+            },
+        );
     };
 
     const exportOverdueReport = () => {
@@ -201,12 +207,7 @@ export default function LibrarianOverdue() {
                         </div>
                     </div>
 
-                    {isLoading ? (
-                        <div className="p-8 text-center">
-                            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-                            <p className="mt-2 text-gray-500">Loading overdue transactions...</p>
-                        </div>
-                    ) : overdueTransactions.length > 0 ? (
+                    {overdueTransactions.length > 0 ? (
                         <div className="divide-y divide-gray-200">
                             {overdueTransactions.map((transaction) => {
                                 const daysOverdue = getDaysOverdue(transaction.due_date);

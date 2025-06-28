@@ -191,4 +191,50 @@ class TransactionController extends Controller
         }
         return redirect()->route('librarian.returns')->with('success', 'Book returned successfully!');
     }
+    // Overdue page: show all overdue transactions for overdue UI
+    public function overduePage(Request $request)
+    {
+        $overdueTransactions = Transaction::with(['user', 'book'])
+            ->whereNull('returned_at')
+            ->where('due_date', '<', Carbon::today())
+            ->orderBy('due_date', 'asc')
+            ->get()
+            ->map(function ($t) {
+                return [
+                    'id' => $t->id,
+                    'borrowed_at' => $t->borrowed_at,
+                    'due_date' => $t->due_date,
+                    'returned_at' => $t->returned_at,
+                    'student_name' => $t->user ? $t->user->name : '',
+                    'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : '',
+                    'student_email' => $t->user ? $t->user->email : '',
+                    'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? null) : null,
+                    'book_title' => $t->book ? $t->book->title : '',
+                    'book_isbn' => $t->book ? $t->book->isbn : '',
+                ];
+            });
+        return Inertia::render('librarian/overdue', [
+            'overdueTransactions' => $overdueTransactions,
+        ]);
+    }
+
+    // Send reminders for overdue books (POST)
+    public function sendOverdueReminders(Request $request)
+    {
+        $request->validate([
+            'transaction_ids' => 'required|array',
+            'transaction_ids.*' => 'integer|exists:transactions,id',
+        ]);
+        // Here you would send emails/SMS. For now, just log.
+        $transactions = Transaction::with(['user', 'book'])->whereIn('id', $request->transaction_ids)->get();
+        foreach ($transactions as $t) {
+            Log::info('Reminder sent for overdue transaction', [
+                'transaction_id' => $t->id,
+                'student_email' => $t->user ? $t->user->email : null,
+                'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? null) : null,
+                'book_title' => $t->book ? $t->book->title : null,
+            ]);
+        }
+        return redirect()->route('librarian.overdue')->with('success', 'Reminders sent!');
+    }
 }

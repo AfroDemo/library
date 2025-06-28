@@ -38,10 +38,11 @@ Route::middleware(['auth'])->group(function () {
         // Process a return (POST)
         Route::post('/librarian/returns/process', [TransactionController::class, 'processReturn'])->name('librarian.returns.process');
 
-        // Overdue books page
-        Route::get('/librarian/overdue', function () {
-            return Inertia::render('librarian/overdue');
-        })->name('librarian.overdue');
+        // Overdue books page (controller provides overdue transactions)
+        Route::get('/librarian/overdue', [TransactionController::class, 'overduePage'])->name('librarian.overdue');
+
+        // Send reminders for overdue books
+        Route::post('/librarian/overdue/send-reminders', [TransactionController::class, 'sendOverdueReminders'])->name('librarian.overdue.sendReminders');
 
         //Transactions
         Route::get('/librarian/transactions', [TransactionController::class, 'index'])->name('librarian.transactions');
