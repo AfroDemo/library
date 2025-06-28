@@ -148,4 +148,47 @@ class TransactionController extends Controller
             'filters' => $request->only(['status']),
         ]);
     }
+
+    // Returns page: show all active (not returned) transactions for returns UI
+    public function returnsPage(Request $request)
+    {
+        $activeTransactions = Transaction::with(['user', 'book'])
+            ->whereNull('returned_at')
+            ->orderBy('borrowed_at', 'desc')
+            ->get()
+            ->map(function ($t) {
+                return [
+                    'id' => $t->id,
+                    'borrowed_at' => $t->borrowed_at,
+                    'due_date' => $t->due_date,
+                    'returned_at' => $t->returned_at,
+                    'student_name' => $t->user ? $t->user->name : '',
+                    'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : '',
+                    'book_title' => $t->book ? $t->book->title : '',
+                    'book_isbn' => $t->book ? $t->book->isbn : '',
+                ];
+            });
+        return Inertia::render('librarian/returns', [
+            'activeTransactions' => $activeTransactions,
+        ]);
+    }
+
+    // Process a return (POST)
+    public function processReturn(Request $request)
+    {
+        $request->validate([
+            'transaction_id' => 'required|integer|exists:transactions,id',
+        ]);
+        $transaction = Transaction::with('book')->findOrFail($request->transaction_id);
+        if ($transaction->returned_at) {
+            return redirect()->back()->withErrors(['transaction_id' => 'Book already returned.']);
+        }
+        $transaction->update([
+            'returned_at' => Carbon::now(),
+        ]);
+        if ($transaction->book) {
+            $transaction->book->update(['available' => true]);
+        }
+        return redirect()->route('librarian.returns')->with('success', 'Book returned successfully!');
+    }
 }

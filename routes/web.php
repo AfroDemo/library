@@ -32,10 +32,11 @@ Route::middleware(['auth'])->group(function () {
         // Transaction Management
         Route::post('/transactions', [TransactionController::class, 'store'])->name('librarian.confirm-borrow');
 
-        // Returns page
-        Route::get('/librarian/returns', function () {
-            return Inertia::render('librarian/returns');
-        })->name('librarian.returns');
+        // Returns page (controller provides active transactions)
+        Route::get('/librarian/returns', [TransactionController::class, 'returnsPage'])->name('librarian.returns');
+
+        // Process a return (POST)
+        Route::post('/librarian/returns/process', [TransactionController::class, 'processReturn'])->name('librarian.returns.process');
 
         // Overdue books page
         Route::get('/librarian/overdue', function () {
