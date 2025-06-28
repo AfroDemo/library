@@ -53,7 +53,6 @@ class DashboardController extends Controller
 
     public function handleScan(Request $request)
     {
-        dd('Handle scan request:', ['input' => $request->all(), 'session' => session()->all()]);
 
         $reset = $request->boolean('reset', false);
         $clearAll = $request->boolean('clear_all', false);
@@ -95,7 +94,7 @@ class DashboardController extends Controller
         if ($scanStep === 'student') {
             Log::info('Parsing QR code:', ['input' => $scanInput]);
             $studentId = $this->parseStudentId($scanInput);
-            $student = Student::where('student_id', $studentId)->with('user')->first();
+            $student = Student::where('member_id', $studentId)->with('user')->first();
 
             if (!$student) {
                 Log::error('Student not found:', ['student_id' => $studentId]);
@@ -103,7 +102,7 @@ class DashboardController extends Controller
             }
 
             session()->put('student', [
-                'student_id' => $student->student_id,
+                'member_id' => $student->member_id,
                 'name' => $student->user->name,
                 'email' => $student->user->email,
             ]);

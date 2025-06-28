@@ -22,6 +22,7 @@ interface Props extends PageProps {
     scanStep: ScanStep;
     errors: Record<string, string>;
     success: string | null;
+    [key: string]: any;
 }
 
 export default function LibrarianDashboard() {
@@ -120,7 +121,6 @@ export default function LibrarianDashboard() {
                 }
             } else {
                 setCameraError('No camera found. Please connect a camera or use manual input.');
-                showToast('error', 'No camera found. Please connect a camera or use manual input.');
             }
         } catch (err: any) {
             console.error('Camera access error:', err.name, err.message);
@@ -148,7 +148,6 @@ export default function LibrarianDashboard() {
     const startScanning = async () => {
         if (!scannerRef.current || !scannerContainerRef.current || !selectedCamera) {
             setCameraError('No camera selected. Please select a camera or use manual input.');
-            showToast('error', 'No camera selected. Please select a camera or use manual input.');
             return;
         }
 
@@ -162,7 +161,7 @@ export default function LibrarianDashboard() {
                     fps: 15,
                     qrbox: { width: 300, height: 300 },
                     aspectRatio: isMobile ? 1.777 : undefined,
-                    formatsToSupport: initialScanStep === 'student' ? ['QR_CODE'] : ['EAN_13', 'CODE_128', 'QR_CODE'],
+                    // @ts-expect-error: experimentalFeatures is not in the type but supported by html5-qrcode
                     experimentalFeatures: {
                         useBarCodeDetectorIfSupported: true,
                     },
@@ -293,35 +292,20 @@ export default function LibrarianDashboard() {
     };
 
     const handleConfirmBorrow = () => {
-        if (!initialStudent || !initialBook || processing) {
-            console.error('Missing student or book:', { initialStudent, initialBook });
-            showToast('error', 'Missing student or book information.');
-            return;
-        }
-
-        // Validate ISBN format
-        if (initialBook.isbn.length !== 10 && initialBook.isbn.length !== 13) {
-            console.error('Invalid ISBN format:', { isbn: initialBook.isbn });
-            showToast('error', 'Invalid ISBN format. ISBN must be 10 or 13 digits.');
+        if (!initialStudent || !initialBook) {
+            // ... (your validation)
             return;
         }
 
         const payload = {
-            student_id: initialStudent.student_id,
+            member_id: initialStudent.member_id,
             book_isbn: initialBook.isbn,
         };
 
         console.log('Confirm borrow payload:', payload);
-        console.log('Form data before POST:', data);
 
-        // Ensure form data is clean
-        setData({
-            scan_input: '',
-            scan_step: 'confirm',
-        });
-
-        post(route('librarian.confirm-borrow'), {
-            data: payload,
+        // Use router.post to send the specific student and book data
+        router.post(route('librarian.confirm-borrow'), payload, {
             preserveState: false,
             headers: {
                 'X-Debug-Source': 'handleConfirmBorrow',
@@ -330,47 +314,44 @@ export default function LibrarianDashboard() {
                 console.log('Borrow confirmation successful');
                 reset();
                 setScanInput('');
-                setData({ scan_input: '', scan_step: 'student' });
                 showToast('success', 'Borrowing confirmed successfully.');
             },
             onError: (errors) => {
                 console.error('Confirm borrow errors:', errors);
                 showToast('error', errors.student_id?.[0] || errors.book_isbn?.[0] || 'Failed to confirm borrowing.');
-                setScanInput('');
-                reset();
             },
         });
     };
 
     const handleReset = () => {
-    console.log('Resetting scan state');
+        console.log('Resetting scan state');
 
-    // Use router.post for the reset action as well
-    router.post(
-        route('librarian.scan'),
-        {
-            scan_input: '',
-            scan_step: 'student',
-            reset: true,
-        },
-        {
-            preserveState: false,
-            headers: {
-                'X-Debug-Source': 'handleReset',
+        // Use router.post for the reset action as well
+        router.post(
+            route('librarian.scan'),
+            {
+                scan_input: '',
+                scan_step: 'student',
+                reset: true,
             },
-            onSuccess: () => {
-                console.log('Reset successful');
-                reset();
-                setScanInput('');
-                showToast('success', 'Scan reset successfully.');
+            {
+                preserveState: false,
+                headers: {
+                    'X-Debug-Source': 'handleReset',
+                },
+                onSuccess: () => {
+                    console.log('Reset successful');
+                    reset();
+                    setScanInput('');
+                    showToast('success', 'Scan reset successfully.');
+                },
+                onError: (errors) => {
+                    console.error('Reset errors:', errors);
+                    showToast('error', errors.reset?.[0] || 'Failed to reset scan state.');
+                },
             },
-            onError: (errors) => {
-                console.error('Reset errors:', errors);
-                showToast('error', errors.reset?.[0] || 'Failed to reset scan state.');
-            },
-        },
-    );
-};
+        );
+    };
 
     const handleClearAll = () => {
         console.log('Clearing all scan state');
@@ -406,10 +387,6 @@ export default function LibrarianDashboard() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Librarian Dashboard" />
-            {/* Debug Props */}
-            <div className="debug" style={{ position: 'fixed', top: '10px', left: '10px', background: 'white', padding: '10px', zIndex: 1000 }}>
-                <pre>{JSON.stringify({ initialScanStep, data, student: initialStudent, book: initialBook, errors }, null, 2)}</pre>
-            </div>
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 {/* Welcome & Quick Stats */}
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -580,7 +557,7 @@ export default function LibrarianDashboard() {
                                         <h3 className="text-lg font-semibold text-gray-900">Confirm Borrowing</h3>
                                         <div className="mt-2 space-y-2">
                                             <p>
-                                                <strong>Student:</strong> {initialStudent.name} ({initialStudent.student_id})
+                                                <strong>Student:</strong> {initialStudent.name} ({initialStudent.member_id})
                                             </p>
                                             <p>
                                                 <strong>Book ISBN:</strong> {initialBook.isbn}
@@ -664,7 +641,7 @@ export default function LibrarianDashboard() {
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Student ID:</span>
-                                            <span className="font-medium">{initialStudent.student_id}</span>
+                                            <span className="font-medium">{initialStudent.member_id}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Name:</span>

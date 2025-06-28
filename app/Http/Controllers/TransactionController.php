@@ -20,7 +20,7 @@ class TransactionController extends Controller
             return response()->json(['error' => 'Student not found'], 404);
         }
         return response()->json([
-            'student_id' => $student->member_id, // Map member_id to student_id for frontend
+            'member_id' => $student->member_id, // Map member_id to member_id for frontend
             'name' => $student->user->name,
             'email' => $student->user->email,
         ]);
@@ -47,20 +47,20 @@ class TransactionController extends Controller
 
         Log::debug($request);
         $request->validate([
-            'student_id' => 'required|string',
+            'member_id' => 'required|string',
             'book_isbn' => 'required|string',
         ]);
 
-        $studentId = $request->input('student_id');
+        $memberId = $request->input('member_id');
         $bookIsbn = $request->input('book_isbn');
 
-        Log::info('Processing borrow confirmation:', ['student_id' => $studentId, 'book_isbn' => $bookIsbn]);
+        Log::info('Processing borrow confirmation:', ['member_id' => $memberId, 'book_isbn' => $bookIsbn]);
 
         $student = session('student');
         $book = session('book');
 
-        if (!$student || $student['student_id'] !== $studentId) {
-            Log::error('Invalid or missing student in session:', ['student_id' => $studentId]);
+        if (!$student || $student['member_id'] !== $memberId) {
+            Log::error('Invalid or missing student in session:', ['member_id' => $memberId]);
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid student data']);
         }
 
@@ -69,9 +69,9 @@ class TransactionController extends Controller
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid book data']);
         }
 
-        $studentModel = Student::where('member_id', $studentId)->first();
+        $studentModel = Student::where('member_id', $memberId)->first();
         if (!$studentModel) {
-            Log::error('Student not found in database:', ['student_id' => $studentId]);
+            Log::error('Student not found in database:', ['member_id' => $memberId]);
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
         }
 
