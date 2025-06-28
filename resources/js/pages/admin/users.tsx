@@ -4,15 +4,9 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { AlertTriangle, Download, Edit, Search, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { BreadcrumbItem, PageProps, ToastMessage } from '../../types';
+import type { BreadcrumbItem, PageProps, ToastMessage, User as UserType } from '../../types';
 
-interface User {
-    id: number;
-    name: string;
-    email: string;
-    role: string;
-    member_id: string | null;
-}
+type User = Pick<UserType, 'id' | 'name' | 'email' | 'role'> & { member_id: string | null };
 
 interface UsersPageProps extends PageProps {
     users: {
@@ -40,10 +34,16 @@ export default function ManageUsers() {
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
-    const [form, setForm] = useState({ name: '', email: '', role: 'student', password: '', member_id: '' });
+    const [form, setForm] = useState<{ name: string; email: string; role: string; password: string; member_id: string }>({
+        name: '',
+        email: '',
+        role: 'student',
+        password: '',
+        member_id: '',
+    });
 
     useEffect(() => {
-        if (success) showToast('success', success);
+        if (typeof success === 'string' && success) showToast('success', success);
         if (errors && Object.values(errors).length > 0) {
             Object.values(errors).forEach((error: any) => showToast('error', error));
         }
@@ -59,8 +59,8 @@ export default function ManageUsers() {
         setToasts((prev) => prev.filter((t) => t.id !== id));
     };
 
-    const handleFilterChange = () => {
-        router.get(route('admin.users.index'), { search, role }, { preserveState: true, replace: true });
+    const handleFilterChange = (newSearch = search, newRole = role) => {
+        router.get(route('admin.users.index'), { search: newSearch, role: newRole }, { preserveState: true, replace: true });
     };
 
     const handlePageChange = (url: string | null) => {
@@ -94,7 +94,10 @@ export default function ManageUsers() {
 
     const handleSubmit = () => {
         const data = { ...form };
-        if (!data.password) delete data.password; // Don't send empty password on update
+        if (!data.password) {
+            // Don't send empty password on update
+            (data as Partial<typeof data>).password = undefined;
+        }
         if (editingUser) {
             router.put(route('admin.users.update', editingUser.id), data, {
                 onSuccess: () => {
@@ -170,8 +173,9 @@ export default function ManageUsers() {
                             <select
                                 value={role}
                                 onChange={(e) => {
-                                    setRole(e.target.value);
-                                    handleFilterChange();
+                                    const newRole = e.target.value;
+                                    setRole(newRole);
+                                    handleFilterChange(search, newRole);
                                 }}
                                 className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 aria-label="Filter by role"
