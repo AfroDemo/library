@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { AlertTriangle, BookOpen, Folder, LayoutGrid, User } from 'lucide-react';
+import { AlertTriangle, BookOpen, Folder, LayoutGrid, TimerReset, User } from 'lucide-react';
 import AppLogo from './app-logo';
 
 import type { PageProps } from '@/types';
@@ -48,6 +48,34 @@ function getMainNavItems(role: string): NavItem[] {
                 title: 'Manage Students',
                 href: '/students',
                 icon: User,
+            },
+        );
+    }
+    if (role === 'admin') {
+        items.push(
+            {
+                title: 'Manage Books',
+                href: '/books',
+                icon: BookOpen,
+            },
+            {
+                title: 'Manage Students',
+                href: '/students',
+                icon: User,
+            },
+        );
+    }
+    if (role === 'student' || role === 'staff') {
+        items.push(
+            {
+                title: 'Books',
+                href: '/user/search',
+                icon: BookOpen,
+            },
+            {
+                title: 'Borrow History',
+                href: '/user/history',
+                icon: TimerReset,
             },
         );
     }

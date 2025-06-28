@@ -16,8 +16,8 @@ class BookController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('author', 'like', "%{$search}%")
-                  ->orWhere('isbn', 'like', "%{$search}%");
+                    ->orWhere('author', 'like', "%{$search}%")
+                    ->orWhere('isbn', 'like', "%{$search}%");
             });
         }
 
@@ -28,6 +28,31 @@ class BookController extends Controller
         $books = $query->orderBy('title')->paginate(20);
 
         return Inertia::render('librarian/books/index', [
+            'books' => $books,
+            'filters' => $request->only(['search', 'available']),
+        ]);
+    }
+
+    public function getBooks(Request $request)
+    {
+        $query = Book::query();
+
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('author', 'like', "%{$search}%")
+                    ->orWhere('isbn', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->has('available')) {
+            $query->where('available', $request->available === 'true');
+        }
+
+        $books = $query->orderBy('title')->paginate(20);
+
+        return Inertia::render('user/search', [
             'books' => $books,
             'filters' => $request->only(['search', 'available']),
         ]);

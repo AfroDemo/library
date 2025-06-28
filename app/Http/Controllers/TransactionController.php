@@ -41,6 +41,28 @@ class TransactionController extends Controller
         ]);
     }
 
+    public function userTransactions(Request $request)
+    {
+        $user = $request->user();
+        $transactions = Transaction::with(['book'])
+            ->where('user_id', $user->id)
+            ->orderBy('borrowed_at', 'desc')
+            ->get()
+            ->map(function ($t) {
+                return [
+                    'id' => $t->id,
+                    'book_title' => $t->book ? $t->book->title : '',
+                    'book_isbn' => $t->book ? $t->book->isbn : '',
+                    'borrowed_at' => $t->borrowed_at,
+                    'due_date' => $t->due_date,
+                    'returned_at' => $t->returned_at,
+                ];
+            });
+        return Inertia::render('user/history', [
+            'transactions' => $transactions,
+        ]);
+    }
+
     // Store a new transaction (used by /api/transactions)
     public function store(Request $request)
     {

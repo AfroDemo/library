@@ -61,10 +61,11 @@ export interface Book {
 
 export interface Transaction {
     id: number;
-    user_id: number;
-    book_id: number;
-    member_id: string;
+    user_id?: number;
+    book_id?: number;
+    member_id?: string;
     book_title: string;
+    book_isbn?: string;
     borrowed_at: string;
     due_date: string;
     returned_at?: string;
@@ -75,6 +76,7 @@ export interface PageProps {
         user: User;
     };
     errors: Record<string, string>;
+    [key: string]: unknown;
 }
 
 export interface Breadcrumb {
