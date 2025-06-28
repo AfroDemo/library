@@ -53,22 +53,28 @@ class DashboardController extends Controller
 
     public function handleScan(Request $request)
     {
-        $request->validate([
-            'scan_input' => 'required|string',
-            'scan_step' => 'required|in:student,book',
-        ]);
+        Log::debug('Handle scan request:', ['input' => $request->all(), 'session' => session()->all()]);
 
-        $scanInput = $request->input('scan_input');
-        $scanStep = $request->input('scan_step');
         $reset = $request->boolean('reset', false);
         $clearAll = $request->boolean('clear_all', false);
 
-        Log::info('Session data on handleScan:', session()->all());
+        // Bypass validation for reset and clear_all actions
+        if (!$reset && !$clearAll) {
+            $request->validate([
+                'scan_input' => 'required|string',
+                'scan_step' => 'required|in:student,book',
+            ]);
+        }
+
+        $scanInput = $request->input('scan_input');
+        $scanStep = $request->input('scan_step', 'student');
+
         Log::info('Processing scan:', ['input' => $scanInput, 'step' => $scanStep, 'reset' => $reset, 'clear_all' => $clearAll]);
 
         if ($clearAll) {
             Log::info('Clearing all scan state');
-            $request->session()->forget(['student', 'scan_step', 'book']);
+            $request->session()->forget(['student', 'book', 'scan_step', 'errors', 'success', '_old_input']);
+            $request->session()->regenerateToken();
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
                 'success' => 'All scan data cleared successfully',
@@ -77,7 +83,7 @@ class DashboardController extends Controller
 
         if ($reset) {
             Log::info('Resetting scan state');
-            $request->session()->forget(['student', 'scan_step', 'book']);
+            $request->session()->forget(['student', 'book', 'scan_step']);
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
                 'success' => 'Scan reset successfully',
@@ -87,7 +93,7 @@ class DashboardController extends Controller
         if ($scanStep === 'student') {
             Log::info('Parsing QR code:', ['input' => $scanInput]);
             $studentId = $this->parseStudentId($scanInput);
-            $student = Student::where('member_id', $studentId)->with('user')->first();
+            $student = Student::where('student_id', $studentId)->with('user')->first();
 
             if (!$student) {
                 Log::error('Student not found:', ['student_id' => $studentId]);
@@ -95,7 +101,7 @@ class DashboardController extends Controller
             }
 
             session()->put('student', [
-                'student_id' => $student->member_id,
+                'student_id' => $student->student_id,
                 'name' => $student->user->name,
                 'email' => $student->user->email,
             ]);
@@ -108,6 +114,15 @@ class DashboardController extends Controller
         }
 
         // Book scan
+        if (strlen($scanInput) !== 10 && strlen($scanInput) !== 13) {
+            Log::error('Invalid ISBN length:', ['isbn' => $scanInput]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid ISBN format. ISBN must be 10 or 13 digits.']);
+        }
+        if (!preg_match('/^\d+$/', $scanInput)) {
+            Log::error('Invalid ISBN characters:', ['isbn' => $scanInput]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid ISBN format. ISBN must contain only digits.']);
+        }
+
         $book = Book::where('isbn', $scanInput)->first();
 
         if (!$book) {
