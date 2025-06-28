@@ -1,6 +1,6 @@
 'use client';
 
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, Trash2, TrendingUp, User } from 'lucide-react';
 import type React from 'react';
@@ -293,53 +293,18 @@ export default function LibrarianDashboard() {
     };
 
     const handleConfirmBorrow = () => {
-        if (!initialStudent || !initialBook || processing) {
-            console.error('Missing student or book:', { initialStudent, initialBook });
-            showToast('error', 'Missing student or book information.');
-            return;
-        }
-
-        // Validate ISBN format
-        if (initialBook.isbn.length !== 10 && initialBook.isbn.length !== 13) {
-            console.error('Invalid ISBN format:', { isbn: initialBook.isbn });
-            showToast('error', 'Invalid ISBN format. ISBN must be 10 or 13 digits.');
-            return;
-        }
-
-        const payload = {
-            student_id: initialStudent.student_id,
-            book_isbn: initialBook.isbn,
-        };
-
-        console.log('Confirm borrow payload:', payload);
-        console.log('Form data before POST:', data);
-
-        // Ensure form data is clean
-        setData({
-            scan_input: '',
-            scan_step: 'confirm',
-        });
-
-        post(route('librarian.confirm-borrow'), {
-            data: payload,
-            preserveState: false,
-            headers: {
-                'X-Debug-Source': 'handleConfirmBorrow',
+        if (!initialStudent || !initialBook) return;
+        // There is no setProcessing, so just rely on the 'processing' state from useForm
+        router.post(
+            '/transactions',
+            {
+                student_id: initialStudent.student_id,
+                book_isbn: initialBook.isbn,
             },
-            onSuccess: () => {
-                console.log('Borrow confirmation successful');
-                reset();
-                setScanInput('');
-                setData({ scan_input: '', scan_step: 'student' });
-                showToast('success', 'Borrowing confirmed successfully.');
+            {
+                // No need to manually set processing, useForm handles it
             },
-            onError: (errors) => {
-                console.error('Confirm borrow errors:', errors);
-                showToast('error', errors.student_id?.[0] || errors.book_isbn?.[0] || 'Failed to confirm borrowing.');
-                setScanInput('');
-                reset();
-            },
-        });
+        );
     };
 
     const handleReset = () => {
@@ -347,10 +312,15 @@ export default function LibrarianDashboard() {
         reset();
         setScanInput('');
         stopScanning();
-        post(route('librarian.scan'), {
-            data: { scan_input: '', scan_step: 'student', reset: true },
-            preserveState: true,
-        });
+        post(
+            route('librarian.scan'),
+            {
+                scan_input: '',
+                scan_step: 'student',
+                reset: true,
+                preserveState: true,
+            }
+        );
     };
 
     const handleClearAll = () => {
@@ -358,10 +328,15 @@ export default function LibrarianDashboard() {
         reset();
         setScanInput('');
         stopScanning();
-        post(route('librarian.scan'), {
-            data: { scan_input: '', scan_step: 'student', clear_all: true },
-            preserveState: true,
-        });
+        post(
+            route('librarian.scan'),
+            {
+                scan_input: '',
+                scan_step: 'student',
+                clear_all: true,
+                preserveState: true,
+            }
+        );
     };
 
     return (
