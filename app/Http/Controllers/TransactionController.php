@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class TransactionController extends Controller
@@ -44,29 +45,62 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'student_id' => 'required|exists:students,member_id', // Expect student_id but validate against member_id
-            'isbn' => 'required|exists:books,isbn',
+            'student_id' => 'required|string',
+            'book_isbn' => 'required|string',
         ]);
 
-        $student = Student::where('member_id', $request->student_id)->first();
-        $book = Book::where('isbn', $request->isbn)->first();
+        $studentId = $request->input('student_id');
+        $bookIsbn = $request->input('book_isbn');
 
-        if (!$book->available) {
-            return response()->json(['error' => 'Book not available'], 400);
+        Log::info('Processing borrow confirmation:', ['student_id' => $studentId, 'book_isbn' => $bookIsbn]);
+
+        $student = session('student');
+        $book = session('book');
+
+        if (!$student || $student['student_id'] !== $studentId) {
+            Log::error('Invalid or missing student in session:', ['student_id' => $studentId]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid student data']);
         }
 
-        $transaction = Transaction::create([
-            'user_id' => $student->user_id,
-            'book_id' => $book->id,
-            'borrowed_at' => Carbon::now(),
-            'due_date' => Carbon::now()->addDays(14),
+        if (!$book || $book['isbn'] !== $bookIsbn) {
+            Log::error('Invalid or missing book in session:', ['book_isbn' => $bookIsbn]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid book data']);
+        }
+
+        $studentModel = Student::where('member_id', $studentId)->first();
+        if (!$studentModel) {
+            Log::error('Student not found in database:', ['student_id' => $studentId]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
+        }
+
+        $bookModel = Book::where('isbn', $bookIsbn)->first();
+        if (!$bookModel) {
+            Log::error('Book not found in database:', ['book_isbn' => $bookIsbn]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Book not found']);
+        }
+
+        if (!$bookModel->available) {
+            Log::error('Book not available:', ['book_isbn' => $bookIsbn]);
+            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Book is not available']);
+        }
+
+        // Create transaction
+        Transaction::create([
+            'user_id' => $studentModel->id,
+            'book_id' => $bookModel->id,
+            'borrowed_at' => now(),
+            'due_date' => now()->addDays(7),
         ]);
 
-        $book->update(['available' => false]);
+        $bookModel->update(['available' => false]);
 
-        return response()->json([
-            'message' => 'Book borrowed successfully',
-            'transaction' => $transaction->load(['user', 'book']),
+        // Clear session data after successful transaction
+        session()->forget(['student', 'scan_step', 'book']);
+
+        Log::info('Transaction created, resetting scan_step to student');
+        return redirect()->route('dashboard')->with([
+            'scan_step' => 'student',
+            'success' => "Book \"{$bookModel->title}\" borrowed successfully",
         ]);
     }
 

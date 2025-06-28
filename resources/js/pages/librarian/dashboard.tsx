@@ -2,13 +2,13 @@
 
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
-import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, TrendingUp, User } from 'lucide-react';
+import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, Trash2, TrendingUp, User } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
 import type { Book, BreadcrumbItem, DashboardStats, PageProps, Student, ToastMessage } from '../../types';
 
-type ScanStep = 'student' | 'book';
+type ScanStep = 'student' | 'book' | 'confirm';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Librarian', href: '/librarian' },
@@ -28,7 +28,7 @@ export default function LibrarianDashboard() {
     const { auth, stats, student: initialStudent, book: initialBook, scanStep: initialScanStep, errors, success } = usePage<Props>().props;
 
     // Debugging: Log props on every render
-    console.log('Received props:', { scanStep: initialScanStep, student: initialStudent, success });
+    console.log('Received props:', { scanStep: initialScanStep, student: initialStudent, book: initialBook, success });
 
     // Scanning state
     const [scanInput, setScanInput] = useState('');
@@ -257,7 +257,27 @@ export default function LibrarianDashboard() {
             onSuccess: () => {
                 reset();
                 setScanInput('');
-                setData('scan_step', initialScanStep); // Ensure scan_step is synced
+                setData('scan_step', initialScanStep);
+            },
+            onError: () => {
+                setScanInput('');
+                reset();
+            },
+        });
+    };
+
+    const handleConfirmBorrow = () => {
+        if (!initialStudent || !initialBook || processing) return;
+
+        post(route('librarian.confirm-borrow'), {
+            data: {
+                student_id: initialStudent.student_id,
+                book_isbn: initialBook.isbn,
+            },
+            onSuccess: () => {
+                reset();
+                setScanInput('');
+                setData('scan_step', 'student');
             },
             onError: () => {
                 setScanInput('');
@@ -270,11 +290,27 @@ export default function LibrarianDashboard() {
         reset();
         setScanInput('');
         stopScanning();
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
         post(route('librarian.scan'), {
             data: { scan_input: '', scan_step: 'student', reset: true },
+        });
+    };
+
+    const handleClearAll = () => {
+        reset();
+        setScanInput('');
+        stopScanning();
+
+        post(route('librarian.scan'), {
+            data: {
+                scan_input: '',
+                scan_step: 'student',
+                clear_all: true,
+            },
+            onSuccess: () => {
+                // Optional: Additional reset logic
+                setData('scan_step', 'student');
+                setData('scan_input', '');
+            },
         });
     };
 
@@ -283,7 +319,7 @@ export default function LibrarianDashboard() {
             <Head title="Librarian Dashboard" />
             {/* Debug Props */}
             <div className="debug" style={{ position: 'fixed', top: '10px', left: '10px', background: 'white', padding: '10px', zIndex: 1000 }}>
-                <pre>{JSON.stringify({ initialScanStep, data, student: initialStudent }, null, 2)}</pre>
+                <pre>{JSON.stringify({ initialScanStep, data, student: initialStudent, book: initialBook }, null, 2)}</pre>
             </div>
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 {/* Welcome & Quick Stats */}
@@ -323,11 +359,15 @@ export default function LibrarianDashboard() {
                                 <div className="mb-6 flex items-center space-x-3">
                                     <Scan className="h-6 w-6 text-blue-600" />
                                     <h2 className="text-xl font-semibold text-gray-900">
-                                        {initialScanStep === 'student' ? 'Scan Student ID QR Code' : 'Scan Book ISBN'}
+                                        {initialScanStep === 'student'
+                                            ? 'Scan Student ID QR Code'
+                                            : initialScanStep === 'book'
+                                              ? 'Scan Book ISBN'
+                                              : 'Confirm Borrowing'}
                                     </h2>
                                 </div>
 
-                                {cameraDevices.length > 0 && (
+                                {cameraDevices.length > 0 && initialScanStep !== 'confirm' && (
                                     <div className="mb-4">
                                         <label htmlFor="cameraSelect" className="block text-sm font-medium text-gray-700">
                                             Select Camera
@@ -354,84 +394,135 @@ export default function LibrarianDashboard() {
                                     </div>
                                 )}
 
-                                <div className="relative mb-4">
-                                    <div
-                                        id="scanner-container"
-                                        ref={scannerContainerRef}
-                                        className={`w-full rounded-lg ${isScanning ? 'block' : 'hidden'}`}
-                                        style={{ maxHeight: isMobile ? '50vh' : '300px' }}
-                                    />
-                                    {!isScanning && (
+                                {initialScanStep !== 'confirm' && (
+                                    <div className="relative mb-4">
                                         <div
-                                            className={`flex h-[${isMobile ? '50vh' : '300px'}] w-full items-center justify-center rounded-lg bg-gray-100`}
-                                        >
-                                            {cameraError ? (
-                                                <p className="px-4 text-center text-red-600" id="camera-error">
-                                                    {cameraError}
-                                                </p>
-                                            ) : (
-                                                <p className="text-gray-500">Camera feed will appear here when scanning</p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <form onSubmit={handleScanSubmit} className="space-y-4">
-                                    <div className="relative">
-                                        <input
-                                            ref={inputRef}
-                                            type="text"
-                                            value={scanInput}
-                                            onChange={(e) => {
-                                                setScanInput(e.target.value);
-                                                setData('scan_input', e.target.value);
-                                            }}
-                                            placeholder={
-                                                cameraError
-                                                    ? 'Enter student ID or full QR code manually...'
-                                                    : initialScanStep === 'student'
-                                                      ? 'Scan or enter student ID...'
-                                                      : 'Scan or enter book ISBN...'
-                                            }
-                                            className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            disabled={processing}
-                                            aria-describedby={cameraError ? 'camera-error' : undefined}
+                                            id="scanner-container"
+                                            ref={scannerContainerRef}
+                                            className={`w-full rounded-lg ${isScanning ? 'block' : 'hidden'}`}
+                                            style={{ maxHeight: isMobile ? '50vh' : '300px' }}
                                         />
-                                        {processing && (
-                                            <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
-                                                <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                                        {!isScanning && (
+                                            <div
+                                                className={`flex h-[${isMobile ? '50vh' : '300px'}] w-full items-center justify-center rounded-lg bg-gray-100`}
+                                            >
+                                                {cameraError ? (
+                                                    <p className="px-4 text-center text-red-600" id="camera-error">
+                                                        {cameraError}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-gray-500">Camera feed will appear here when scanning</p>
+                                                )}
                                             </div>
                                         )}
                                     </div>
+                                )}
 
-                                    <div className="flex space-x-3">
-                                        <button
-                                            type="button"
-                                            onClick={isScanning ? stopScanning : startScanning}
-                                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                                            disabled={processing || !selectedCamera}
-                                            aria-label={isScanning ? 'Stop scanning' : 'Start scanning'}
-                                        >
-                                            {isScanning ? 'Stop Scanning' : 'Start Scanning'}
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={!data.scan_input.trim() || processing}
-                                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                                            aria-label="Submit manual scan"
-                                        >
-                                            {processing ? 'Processing...' : 'Manual Scan'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleReset}
-                                            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
-                                            aria-label="Reset scanning"
-                                        >
-                                            <RefreshCw className="h-4 w-4" />
-                                        </button>
+                                {initialScanStep !== 'confirm' && (
+                                    <form onSubmit={handleScanSubmit} className="space-y-4">
+                                        <div className="relative">
+                                            <input
+                                                ref={inputRef}
+                                                type="text"
+                                                value={scanInput}
+                                                onChange={(e) => {
+                                                    setScanInput(e.target.value);
+                                                    setData('scan_input', e.target.value);
+                                                }}
+                                                placeholder={
+                                                    cameraError
+                                                        ? 'Enter student ID or full QR code manually...'
+                                                        : initialScanStep === 'student'
+                                                          ? 'Scan or enter student ID...'
+                                                          : 'Scan or enter book ISBN...'
+                                                }
+                                                className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                                disabled={processing}
+                                                aria-describedby={cameraError ? 'camera-error' : undefined}
+                                            />
+                                            {processing && (
+                                                <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
+                                                    <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex space-x-3">
+                                            <button
+                                                type="button"
+                                                onClick={isScanning ? stopScanning : startScanning}
+                                                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                                disabled={processing || !selectedCamera}
+                                                aria-label={isScanning ? 'Stop scanning' : 'Start scanning'}
+                                            >
+                                                {isScanning ? 'Stop Scanning' : 'Start Scanning'}
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={!data.scan_input.trim() || processing}
+                                                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                                aria-label="Submit manual scan"
+                                            >
+                                                {processing ? 'Processing...' : 'Manual Scan'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleReset}
+                                                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                                                aria-label="Reset scanning"
+                                            >
+                                                <RefreshCw className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleClearAll}
+                                                className="rounded-lg border border-red-300 px-4 py-2 text-red-700 transition-colors hover:bg-red-50 focus:ring-2 focus:ring-red-500 focus:outline-none"
+                                                aria-label="Clear all scans"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
+
+                                {/* Borrowing Form */}
+                                {initialScanStep === 'confirm' && initialStudent && initialBook && (
+                                    <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                                        <h3 className="text-lg font-semibold text-gray-900">Confirm Borrowing</h3>
+                                        <div className="mt-2 space-y-2">
+                                            <p>
+                                                <strong>Student:</strong> {initialStudent.name} ({initialStudent.student_id})
+                                            </p>
+                                            <p>
+                                                <strong>Book ISBN:</strong> {initialBook.isbn}
+                                            </p>
+                                            <p>
+                                                <strong>Book Title:</strong> {initialBook.title}
+                                            </p>
+                                            <p>
+                                                <strong>Author:</strong> {initialBook.author}
+                                            </p>
+                                        </div>
+                                        <div className="mt-4 flex space-x-3">
+                                            <button
+                                                type="button"
+                                                onClick={handleConfirmBorrow}
+                                                className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                                disabled={processing}
+                                            >
+                                                {processing ? 'Processing...' : 'Confirm Borrowing'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleReset}
+                                                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                                                aria-label="Cancel borrowing"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
                                     </div>
-                                </form>
+                                )}
 
                                 {/* Step Indicator */}
                                 <div className="mt-6 flex items-center justify-center space-x-4">
@@ -447,11 +538,27 @@ export default function LibrarianDashboard() {
                                     </div>
                                     <div
                                         className={`flex items-center space-x-2 rounded-full px-3 py-1 text-sm ${
-                                            initialScanStep === 'book' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                                            initialScanStep === 'book'
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : initialScanStep === 'confirm'
+                                                  ? 'bg-blue-100 text-blue-800'
+                                                  : 'bg-gray-100 text-gray-600'
                                         }`}
                                     >
-                                        <span className={`h-2 w-2 rounded-full ${initialScanStep === 'book' ? 'bg-blue-600' : 'bg-gray-400'}`}></span>
+                                        <span
+                                            className={`h-2 w-2 rounded-full ${initialScanStep === 'book' || initialScanStep === 'confirm' ? 'bg-blue-600' : 'bg-gray-400'}`}
+                                        ></span>
                                         <span>Step 2: Book ISBN</span>
+                                    </div>
+                                    <div
+                                        className={`flex items-center space-x-2 rounded-full px-3 py-1 text-sm ${
+                                            initialScanStep === 'confirm' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`h-2 w-2 rounded-full ${initialScanStep === 'confirm' ? 'bg-blue-600' : 'bg-gray-400'}`}
+                                        ></span>
+                                        <span>Step 3: Confirm</span>
                                     </div>
                                 </div>
                             </div>

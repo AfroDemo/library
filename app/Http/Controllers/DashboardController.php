@@ -17,8 +17,7 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
-        // Log session data for debugging
-        // Log::info('Session data on index:', session()->all());
+        Log::info('Session data on index:', session()->all());
 
         if ($user->role === 'admin') {
             return Inertia::render('admin/dashboard');
@@ -36,8 +35,6 @@ class DashboardController extends Controller
                     ->count(),
                 'activeTransactions' => Transaction::whereNull('returned_at')->count(),
             ];
-
-            // Log::info('Rendering dashboard with scan_step:', ['scan_step' => session('scan_step', 'student')]);
 
             return Inertia::render('librarian/dashboard', [
                 'stats' => $stats,
@@ -64,13 +61,23 @@ class DashboardController extends Controller
         $scanInput = $request->input('scan_input');
         $scanStep = $request->input('scan_step');
         $reset = $request->boolean('reset', false);
+        $clearAll = $request->boolean('clear_all', false);
 
         Log::info('Session data on handleScan:', session()->all());
-        Log::info('Processing scan:', ['input' => $scanInput, 'step' => $scanStep, 'reset' => $reset]);
+        Log::info('Processing scan:', ['input' => $scanInput, 'step' => $scanStep, 'reset' => $reset, 'clear_all' => $clearAll]);
+
+        if ($clearAll) {
+            Log::info('Clearing all scan state');
+            $request->session()->forget(['student', 'scan_step', 'book']);
+            return redirect()->route('dashboard')->with([
+                'scan_step' => 'student',
+                'success' => 'All scan data cleared successfully',
+            ]);
+        }
 
         if ($reset) {
             Log::info('Resetting scan state');
-            session()->forget(['student', 'scan_step', 'book']);
+            $request->session()->forget(['student', 'scan_step', 'book']);
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
                 'success' => 'Scan reset successfully',
@@ -87,7 +94,6 @@ class DashboardController extends Controller
                 return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
             }
 
-            // Store student and scan_step in session
             session()->put('student', [
                 'student_id' => $student->member_id,
                 'name' => $student->user->name,
@@ -121,30 +127,18 @@ class DashboardController extends Controller
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Please scan student ID first']);
         }
 
-        $studentModel = Student::where('member_id', $student['student_id'])->first();
-
-        if (!$studentModel) {
-            Log::error('Student not found in database:', ['student_id' => $student['student_id']]);
-            return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
-        }
-
-        // Create transaction
-        Transaction::create([
-            'student_id' => $studentModel->id,
-            'book_id' => $book->id,
-            'borrowed_at' => now(),
-            'due_date' => now()->addDays(14),
+        // Store book details in session and move to confirm step
+        session()->put('book', [
+            'isbn' => $book->isbn,
+            'title' => $book->title,
+            'author' => $book->author,
+            'available' => $book->available,
         ]);
+        session()->put('scan_step', 'confirm');
 
-        $book->update(['available' => false]);
-
-        // Clear session data after successful transaction
-        session()->forget(['student', 'scan_step', 'book']);
-
-        Log::info('Transaction created, resetting scan_step to student');
+        Log::info('Book found, setting scan_step to confirm:', ['isbn' => $scanInput]);
         return redirect()->route('dashboard')->with([
-            'scan_step' => 'student',
-            'success' => "Book \"{$book->title}\" borrowed successfully",
+            'success' => "Book \"{$book->title}\" loaded successfully, please confirm borrowing",
         ]);
     }
 
