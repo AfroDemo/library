@@ -343,16 +343,17 @@ export default function LibrarianDashboard() {
     };
 
     const handleReset = () => {
-        console.log('Resetting scan state');
+    console.log('Resetting scan state');
 
-        // Ensure form data is clean and include reset flag
-        setData({
+    // Use router.post for the reset action as well
+    router.post(
+        route('librarian.scan'),
+        {
             scan_input: '',
             scan_step: 'student',
             reset: true,
-        });
-
-        post(route('librarian.scan'), {
+        },
+        {
             preserveState: false,
             headers: {
                 'X-Debug-Source': 'handleReset',
@@ -361,17 +362,15 @@ export default function LibrarianDashboard() {
                 console.log('Reset successful');
                 reset();
                 setScanInput('');
-                setData({ scan_input: '', scan_step: 'student' });
                 showToast('success', 'Scan reset successfully.');
             },
             onError: (errors) => {
                 console.error('Reset errors:', errors);
                 showToast('error', errors.reset?.[0] || 'Failed to reset scan state.');
-                setScanInput('');
-                reset();
             },
-        });
-    };
+        },
+    );
+};
 
     const handleClearAll = () => {
         console.log('Clearing all scan state');
