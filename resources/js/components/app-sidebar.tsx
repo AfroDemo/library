@@ -4,16 +4,55 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-react';
+import { AlertTriangle, BookOpen, Folder, LayoutGrid, User } from 'lucide-react';
 import AppLogo from './app-logo';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutGrid,
-    },
-];
+import type { PageProps } from '@/types';
+import { usePage } from '@inertiajs/react';
+
+function getMainNavItems(role: string): NavItem[] {
+    const items: NavItem[] = [
+        {
+            title: 'Dashboard',
+            href: '/dashboard',
+            icon: LayoutGrid,
+        },
+    ];
+    if (role === 'librarian' || role === 'admin') {
+        items.push(
+            {
+                title: 'Transactions',
+                href: '/librarian/transactions',
+                icon: Folder,
+            },
+            {
+                title: 'Returns',
+                href: '/librarian/returns',
+                icon: BookOpen,
+            },
+            {
+                title: 'Overdue Books',
+                href: '/librarian/overdue',
+                icon: AlertTriangle,
+            },
+        );
+    }
+    if (role === 'admin') {
+        items.push(
+            {
+                title: 'Manage Books',
+                href: '/books',
+                icon: BookOpen,
+            },
+            {
+                title: 'Manage Students',
+                href: '/students',
+                icon: User,
+            },
+        );
+    }
+    return items;
+}
 
 const footerNavItems: NavItem[] = [
     {
@@ -28,7 +67,11 @@ const footerNavItems: NavItem[] = [
     },
 ];
 
-export function AppSidebar() {
+function AppSidebar() {
+    const page = usePage<PageProps>();
+    // Default to 'user' if not found
+    const role = page.props?.auth?.user?.role || 'user';
+    const mainNavItems = getMainNavItems(role);
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -54,3 +97,5 @@ export function AppSidebar() {
         </Sidebar>
     );
 }
+
+export default AppSidebar;
