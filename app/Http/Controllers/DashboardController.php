@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Book;
 use App\Models\Student;
 use App\Models\Transaction;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -19,8 +21,36 @@ class DashboardController extends Controller
 
         Log::info('Session data on index:', session()->all());
 
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
         if ($user->role === 'admin') {
-            return Inertia::render('admin/dashboard');
+            // Cache admin stats for 5 minutes to reduce database load
+            $stats = Cache::remember('admin_dashboard_stats', 300, function () {
+                $today = Carbon::today();
+
+                return [
+                    'totalBooks' => Book::count(),
+                    'availableBooks' => Book::where('available', true)->count(),
+                    'borrowedBooks' => Book::where('available', false)->count(),
+                    'totalStudents' => Student::count(),
+                    'totalLibrarians' => User::where('role', 'librarian')->count(),
+                    'totalUsers' => User::count(),
+                    'totalTransactions' => Transaction::count(),
+                    'overdueBooks' => Transaction::whereNull('returned_at')
+                        ->where('due_date', '<', $today)
+                        ->count(),
+                    'activeTransactions' => Transaction::whereNull('returned_at')->count(),
+                    'recentTransactions' => Transaction::whereDate('borrowed_at', $today)->count(),
+                ];
+            });
+
+            return Inertia::render('admin/dashboard', [
+                'stats' => $stats,
+                'success' => session('success', null),
+                'errors' => session('errors', []),
+            ]);
         } elseif ($user->role === 'librarian') {
             $today = Carbon::today();
 
@@ -53,11 +83,8 @@ class DashboardController extends Controller
 
     public function handleScan(Request $request)
     {
-
         $reset = $request->boolean('reset', false);
         $clearAll = $request->boolean('clear_all', false);
-
-
 
         // Bypass validation for reset and clear_all actions
         if (!$reset && !$clearAll) {
@@ -75,7 +102,6 @@ class DashboardController extends Controller
         if ($clearAll) {
             Log::info('Clearing all scan state');
             session()->forget(['student', 'scan_step', 'book']);
-            session()->regenerateToken();
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
                 'success' => 'All scan data cleared successfully',
