@@ -6,7 +6,7 @@ import AppLayout from '../../layouts/app-layout';
 import type { BreadcrumbItem } from '../../types';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Librarian', href: '/librarian' },
+    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Overdue Books', href: '/librarian/overdue' },
 ];
 
@@ -137,7 +137,7 @@ export default function LibrarianOverdue(props: OverduePageProps) {
                                 <span>Export Report</span>
                             </button>
                             <button
-                                onClick={sendReminders}
+                                onClick={() => sendReminders()}
                                 disabled={selectedTransactions.length === 0}
                                 className="flex items-center space-x-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >

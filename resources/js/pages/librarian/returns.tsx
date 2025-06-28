@@ -20,7 +20,7 @@ type TransactionDisplay = {
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Librarian', href: '/librarian' },
+    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Returns', href: '/librarian/returns' },
 ];
 

@@ -11,7 +11,7 @@ import type { Book, BreadcrumbItem, DashboardStats, PageProps, Student, ToastMes
 type ScanStep = 'student' | 'book' | 'confirm';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Librarian', href: '/librarian' },
+    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Dashboard', href: '/librarian/dashboard' },
 ];
 

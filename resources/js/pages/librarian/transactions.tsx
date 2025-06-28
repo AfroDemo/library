@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
 import type { Book, BreadcrumbItem, Transaction } from '../../types';
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Librarian', href: '/librarian' },
+    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Transactions', href: '/librarian/transactions' },
 ];
 
