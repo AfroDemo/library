@@ -18,7 +18,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Log session data for debugging
-        Log::info('Session data on index:', session()->all());
+        // Log::info('Session data on index:', session()->all());
 
         if ($user->role === 'admin') {
             return Inertia::render('admin/dashboard');
@@ -37,7 +37,7 @@ class DashboardController extends Controller
                 'activeTransactions' => Transaction::whereNull('returned_at')->count(),
             ];
 
-            Log::info('Rendering dashboard with scan_step:', ['scan_step' => session('scan_step', 'student')]);
+            // Log::info('Rendering dashboard with scan_step:', ['scan_step' => session('scan_step', 'student')]);
 
             return Inertia::render('librarian/dashboard', [
                 'stats' => $stats,
@@ -65,16 +65,14 @@ class DashboardController extends Controller
         $scanStep = $request->input('scan_step');
         $reset = $request->boolean('reset', false);
 
-        // Log session data before processing
         Log::info('Session data on handleScan:', session()->all());
         Log::info('Processing scan:', ['input' => $scanInput, 'step' => $scanStep, 'reset' => $reset]);
 
         if ($reset) {
             Log::info('Resetting scan state');
+            session()->forget(['student', 'scan_step', 'book']);
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
-                'student' => null,
-                'book' => null,
                 'success' => 'Scan reset successfully',
             ]);
         }
@@ -89,14 +87,16 @@ class DashboardController extends Controller
                 return redirect()->route('dashboard')->withErrors(['scan_input' => 'Student not found']);
             }
 
+            // Store student and scan_step in session
+            session()->put('student', [
+                'student_id' => $student->member_id,
+                'name' => $student->user->name,
+                'email' => $student->user->email,
+            ]);
+            session()->put('scan_step', 'book');
+
             Log::info('Student found, setting scan_step to book:', ['student_id' => $studentId]);
             return redirect()->route('dashboard')->with([
-                'student' => [
-                    'student_id' => $student->member_id,
-                    'name' => $student->user->name,
-                    'email' => $student->user->email,
-                ],
-                'scan_step' => 'book',
                 'success' => "Student {$student->user->name} loaded successfully",
             ]);
         }
@@ -138,11 +138,12 @@ class DashboardController extends Controller
 
         $book->update(['available' => false]);
 
+        // Clear session data after successful transaction
+        session()->forget(['student', 'scan_step', 'book']);
+
         Log::info('Transaction created, resetting scan_step to student');
         return redirect()->route('dashboard')->with([
             'scan_step' => 'student',
-            'student' => null,
-            'book' => null,
             'success' => "Book \"{$book->title}\" borrowed successfully",
         ]);
     }

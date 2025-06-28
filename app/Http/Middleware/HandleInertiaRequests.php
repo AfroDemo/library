@@ -45,7 +45,13 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+            ],'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'errors' => fn () => $request->session()->get('errors'),
             ],
+            'student' => fn () => $request->session()->get('student'),
+            'book' => fn () => $request->session()->get('book'),
+            'scanStep' => fn () => $request->session()->get('scan_step', 'student'),
             'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
