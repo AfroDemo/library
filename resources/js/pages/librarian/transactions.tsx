@@ -58,7 +58,7 @@ export default function LibrarianTransactions({ transactions }: LibrarianTransac
     const mappedTransactions: TransactionDisplay[] = transactions.data.map((t) => ({
         ...t,
         student_name: t.user?.name || '',
-        member_id: t.user_id ? t.user_id.toString() : '',
+        member_id: t.user.student.member_id ? t.user.student.member_id.toString() : '',
         book_title: t.book?.title || '',
         book_isbn: t.book?.isbn || '',
     }));

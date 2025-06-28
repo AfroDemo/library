@@ -197,8 +197,6 @@ class TransactionController extends Controller
 
         $transactions = $query->paginate(20);
 
-        dd($transactions);
-
         return Inertia::render('librarian/transactions', [
             'transactions' => $transactions,
             'filters' => $request->only(['status']),
