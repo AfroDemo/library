@@ -182,7 +182,7 @@ class TransactionController extends Controller
     // List transactions for Inertia rendering
     public function index(Request $request)
     {
-        $query = Transaction::with(['user', 'book'])->orderBy('borrowed_at', 'desc');
+        $query = Transaction::with(['user.student', 'book'])->orderBy('borrowed_at', 'desc');
 
         if ($request->has('status')) {
             if ($request->status === 'active') {
@@ -196,6 +196,8 @@ class TransactionController extends Controller
         }
 
         $transactions = $query->paginate(20);
+
+        dd($transactions);
 
         return Inertia::render('librarian/transactions', [
             'transactions' => $transactions,

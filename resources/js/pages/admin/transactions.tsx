@@ -26,24 +26,11 @@ export default function AdminTransactions() {
     });
 
     useEffect(() => {
-        fetchTransactions();
-    }, []);
-
-    useEffect(() => {
         filterTransactions();
         calculateStats();
     }, [transactions, searchTerm, statusFilter, dateFilter]);
 
-    const fetchTransactions = async () => {
-        try {
-            const response = await axios.get('/api/admin/transactions');
-            setTransactions(response.data);
-        } catch (error) {
-            console.error('Failed to fetch transactions:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+
 
     const filterTransactions = () => {
         let filtered = [...transactions];
@@ -52,7 +39,7 @@ export default function AdminTransactions() {
         if (searchTerm) {
             filtered = filtered.filter(
                 (transaction) =>
-                    transaction.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    transaction.member_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     transaction.book_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     transaction.member_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     transaction.book_isbn?.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -138,7 +125,7 @@ export default function AdminTransactions() {
             ...filteredTransactions.map((t) => [
                 t.id.toString(),
                 t.member_id,
-                t.student_name,
+                t.member_name,
                 t.book_isbn,
                 t.book_title,
                 formatDate(t.borrowed_at),
@@ -314,7 +301,7 @@ export default function AdminTransactions() {
                                                 <div className="flex items-center">
                                                     <User className="mr-3 h-8 w-8 text-gray-400" />
                                                     <div>
-                                                        <div className="text-sm font-medium text-gray-900">{transaction.student_name}</div>
+                                                        <div className="text-sm font-medium text-gray-900">{transaction.member_name}</div>
                                                         <div className="text-sm text-gray-500">{transaction.member_id}</div>
                                                     </div>
                                                 </div>
