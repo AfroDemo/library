@@ -45,22 +45,8 @@ function getMainNavItems(role: string): NavItem[] {
                 icon: BookOpen,
             },
             {
-                title: 'Manage Students',
-                href: '/students',
-                icon: User,
-            },
-        );
-    }
-    if (role === 'admin') {
-        items.push(
-            {
-                title: 'Manage Books',
-                href: '/books',
-                icon: BookOpen,
-            },
-            {
-                title: 'Manage Students',
-                href: '/students',
+                title: 'Manage User',
+                href: '/admin/users',
                 icon: User,
             },
         );
