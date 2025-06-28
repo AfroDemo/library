@@ -28,7 +28,7 @@ export default function LibrarianDashboard() {
     const { auth, stats, student: initialStudent, book: initialBook, scanStep: initialScanStep, errors, success } = usePage<Props>().props;
 
     // Debugging: Log props on every render
-    console.log('Received props:', { scanStep: initialScanStep, student: initialStudent, book: initialBook, success });
+    console.log('Received props:', { scanStep: initialScanStep, student: initialStudent, book: initialBook, success, errors });
 
     // Scanning state
     const [scanInput, setScanInput] = useState('');
@@ -61,30 +61,41 @@ export default function LibrarianDashboard() {
         const userAgent = navigator.userAgent.toLowerCase();
         setIsMobile(/mobile|android|iphone|ipad|tablet/i.test(userAgent));
 
-        if (inputRef.current) {
+        // Initialize html5-qrcode only for 'student' or 'book' steps
+        if (initialScanStep !== 'confirm') {
+            if (!scannerRef.current) {
+                scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
+            }
+            loadCameras();
+        }
+
+        // Focus input if not in confirm step
+        if (initialScanStep !== 'confirm' && inputRef.current) {
             inputRef.current.focus();
         }
 
-        // Initialize html5-qrcode
-        scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
-
-        // Load cameras
-        loadCameras();
-
-        // Show toasts
+        // Show toasts for success and errors
         if (success) {
             showToast('success', success);
         }
         if (errors.scan_input) {
             showToast('error', errors.scan_input);
         }
+        if (errors.student_id || errors.book_isbn) {
+            showToast('error', errors.student_id?.[0] || errors.book_isbn?.[0] || 'Validation error occurred.');
+        }
 
         return () => {
             stopScanning();
+            if (initialScanStep === 'confirm' && scannerRef.current) {
+                scannerRef.current = null;
+            }
         };
-    }, [success, errors]);
+    }, [success, errors, initialScanStep]);
 
     const loadCameras = async () => {
+        if (!scannerRef.current) return;
+
         try {
             const devices = await Html5Qrcode.getCameras();
             console.log('Available cameras:', devices);
@@ -215,9 +226,9 @@ export default function LibrarianDashboard() {
     };
 
     useEffect(() => {
-        if (cameraError && inputRef.current) {
+        if (cameraError && inputRef.current && initialScanStep !== 'confirm') {
             inputRef.current.focus();
-        } else if (inputRef.current) {
+        } else if (inputRef.current && initialScanStep !== 'confirm') {
             inputRef.current.focus();
         }
     }, [initialScanStep, cameraError]);
@@ -252,14 +263,29 @@ export default function LibrarianDashboard() {
         e.preventDefault();
         if (!data.scan_input.trim() || processing) return;
 
+        // Client-side ISBN validation
+        if (data.scan_step === 'book') {
+            if (data.scan_input.length !== 10 && data.scan_input.length !== 13) {
+                showToast('error', 'Invalid ISBN format. ISBN must be 10 or 13 digits.');
+                return;
+            }
+            if (!/^\d+$/.test(data.scan_input)) {
+                showToast('error', 'Invalid ISBN format. ISBN must contain only digits.');
+                return;
+            }
+        }
+
         console.log('Submitting scan:', data);
         post(route('librarian.scan'), {
+            preserveState: true,
             onSuccess: () => {
                 reset();
                 setScanInput('');
                 setData('scan_step', initialScanStep);
             },
-            onError: () => {
+            onError: (errors) => {
+                console.error('Scan errors:', errors);
+                showToast('error', errors.scan_input || 'Failed to process scan.');
                 setScanInput('');
                 reset();
             },
@@ -267,19 +293,49 @@ export default function LibrarianDashboard() {
     };
 
     const handleConfirmBorrow = () => {
-        if (!initialStudent || !initialBook || processing) return;
+        if (!initialStudent || !initialBook || processing) {
+            console.error('Missing student or book:', { initialStudent, initialBook });
+            showToast('error', 'Missing student or book information.');
+            return;
+        }
+
+        // Validate ISBN format
+        if (initialBook.isbn.length !== 10 && initialBook.isbn.length !== 13) {
+            console.error('Invalid ISBN format:', { isbn: initialBook.isbn });
+            showToast('error', 'Invalid ISBN format. ISBN must be 10 or 13 digits.');
+            return;
+        }
+
+        const payload = {
+            student_id: initialStudent.student_id,
+            book_isbn: initialBook.isbn,
+        };
+
+        console.log('Confirm borrow payload:', payload);
+        console.log('Form data before POST:', data);
+
+        // Ensure form data is clean
+        setData({
+            scan_input: '',
+            scan_step: 'confirm',
+        });
 
         post(route('librarian.confirm-borrow'), {
-            data: {
-                student_id: initialStudent.student_id,
-                book_isbn: initialBook.isbn,
+            data: payload,
+            preserveState: false,
+            headers: {
+                'X-Debug-Source': 'handleConfirmBorrow',
             },
             onSuccess: () => {
+                console.log('Borrow confirmation successful');
                 reset();
                 setScanInput('');
-                setData('scan_step', 'student');
+                setData({ scan_input: '', scan_step: 'student' });
+                showToast('success', 'Borrowing confirmed successfully.');
             },
-            onError: () => {
+            onError: (errors) => {
+                console.error('Confirm borrow errors:', errors);
+                showToast('error', errors.student_id?.[0] || errors.book_isbn?.[0] || 'Failed to confirm borrowing.');
                 setScanInput('');
                 reset();
             },
@@ -287,30 +343,24 @@ export default function LibrarianDashboard() {
     };
 
     const handleReset = () => {
+        console.log('Resetting scan state');
         reset();
         setScanInput('');
         stopScanning();
         post(route('librarian.scan'), {
             data: { scan_input: '', scan_step: 'student', reset: true },
+            preserveState: true,
         });
     };
 
     const handleClearAll = () => {
+        console.log('Clearing all scan state');
         reset();
         setScanInput('');
         stopScanning();
-
         post(route('librarian.scan'), {
-            data: {
-                scan_input: '',
-                scan_step: 'student',
-                clear_all: true,
-            },
-            onSuccess: () => {
-                // Optional: Additional reset logic
-                setData('scan_step', 'student');
-                setData('scan_input', '');
-            },
+            data: { scan_input: '', scan_step: 'student', clear_all: true },
+            preserveState: true,
         });
     };
 
@@ -319,7 +369,7 @@ export default function LibrarianDashboard() {
             <Head title="Librarian Dashboard" />
             {/* Debug Props */}
             <div className="debug" style={{ position: 'fixed', top: '10px', left: '10px', background: 'white', padding: '10px', zIndex: 1000 }}>
-                <pre>{JSON.stringify({ initialScanStep, data, student: initialStudent, book: initialBook }, null, 2)}</pre>
+                <pre>{JSON.stringify({ initialScanStep, data, student: initialStudent, book: initialBook, errors }, null, 2)}</pre>
             </div>
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 {/* Welcome & Quick Stats */}
@@ -538,11 +588,9 @@ export default function LibrarianDashboard() {
                                     </div>
                                     <div
                                         className={`flex items-center space-x-2 rounded-full px-3 py-1 text-sm ${
-                                            initialScanStep === 'book'
+                                            initialScanStep === 'book' || initialScanStep === 'confirm'
                                                 ? 'bg-blue-100 text-blue-800'
-                                                : initialScanStep === 'confirm'
-                                                  ? 'bg-blue-100 text-blue-800'
-                                                  : 'bg-gray-100 text-gray-600'
+                                                : 'bg-gray-100 text-gray-600'
                                         }`}
                                     >
                                         <span

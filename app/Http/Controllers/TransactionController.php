@@ -44,6 +44,8 @@ class TransactionController extends Controller
     // Store a new transaction (used by /api/transactions)
     public function store(Request $request)
     {
+
+        Log::debug($request);
         $request->validate([
             'student_id' => 'required|string',
             'book_isbn' => 'required|string',
@@ -89,7 +91,7 @@ class TransactionController extends Controller
             'user_id' => $studentModel->id,
             'book_id' => $bookModel->id,
             'borrowed_at' => now(),
-            'due_date' => now()->addDays(7),
+            'due_date' => now()->addDays(14),
         ]);
 
         $bookModel->update(['available' => false]);
