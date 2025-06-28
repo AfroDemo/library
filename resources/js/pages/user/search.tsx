@@ -5,7 +5,7 @@ import AppLayout from '../../layouts/app-layout';
 import type { Book, BreadcrumbItem, PageProps } from '../../types';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'User', href: '/user' },
+    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Search Books', href: '/user/search' },
 ];
 

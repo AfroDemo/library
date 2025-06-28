@@ -44,22 +44,54 @@ class TransactionController extends Controller
     public function userTransactions(Request $request)
     {
         $user = $request->user();
-        $transactions = Transaction::with(['book'])
+        $query = Transaction::with(['book'])
             ->where('user_id', $user->id)
-            ->orderBy('borrowed_at', 'desc')
-            ->get()
-            ->map(function ($t) {
-                return [
-                    'id' => $t->id,
-                    'book_title' => $t->book ? $t->book->title : '',
-                    'book_isbn' => $t->book ? $t->book->isbn : '',
-                    'borrowed_at' => $t->borrowed_at,
-                    'due_date' => $t->due_date,
-                    'returned_at' => $t->returned_at,
-                ];
+            ->orderBy('borrowed_at', 'desc');
+
+        // Server-side search
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('book', function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                        ->orWhere('isbn', 'like', "%{$search}%");
+                });
             });
+        }
+
+        // Status filter
+        if ($request->has('status')) {
+            if ($request->status === 'active') {
+                $query->whereNull('returned_at');
+            } elseif ($request->status === 'returned') {
+                $query->whereNotNull('returned_at');
+            } elseif ($request->status === 'overdue') {
+                $query->whereNull('returned_at')
+                    ->where('due_date', '<', Carbon::today());
+            }
+        }
+
+        // Log the query for debugging
+        Log::info('User transactions queried', [
+            'user_id' => $user->id,
+            'search' => $request->search,
+            'status' => $request->status,
+        ]);
+
+        $transactions = $query->paginate(20)->through(function ($t) {
+            return [
+                'id' => $t->id,
+                'borrowed_at' => $t->borrowed_at->toDateTimeString(),
+                'due_date' => $t->due_date->toDateTimeString(),
+                'returned_at' => $t->returned_at?->toDateTimeString(),
+                'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                'book_isbn' => $t->book ? $t->book->isbn : 'N/A',
+            ];
+        });
+
         return Inertia::render('user/history', [
             'transactions' => $transactions,
+            'filters' => $request->only(['search', 'status']),
         ]);
     }
 
