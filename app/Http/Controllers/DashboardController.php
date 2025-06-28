@@ -53,10 +53,12 @@ class DashboardController extends Controller
 
     public function handleScan(Request $request)
     {
-        Log::debug('Handle scan request:', ['input' => $request->all(), 'session' => session()->all()]);
+        dd('Handle scan request:', ['input' => $request->all(), 'session' => session()->all()]);
 
         $reset = $request->boolean('reset', false);
         $clearAll = $request->boolean('clear_all', false);
+
+
 
         // Bypass validation for reset and clear_all actions
         if (!$reset && !$clearAll) {
@@ -73,8 +75,8 @@ class DashboardController extends Controller
 
         if ($clearAll) {
             Log::info('Clearing all scan state');
-            $request->session()->forget(['student', 'book', 'scan_step', 'errors', 'success', '_old_input']);
-            $request->session()->regenerateToken();
+            session()->forget(['student', 'scan_step', 'book']);
+            session()->regenerateToken();
             return redirect()->route('dashboard')->with([
                 'scan_step' => 'student',
                 'success' => 'All scan data cleared successfully',

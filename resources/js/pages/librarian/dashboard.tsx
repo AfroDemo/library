@@ -1,6 +1,6 @@
 'use client';
 
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, Trash2, TrendingUp, User } from 'lucide-react';
 import type React from 'react';
@@ -344,39 +344,64 @@ export default function LibrarianDashboard() {
 
     const handleReset = () => {
         console.log('Resetting scan state');
-        reset();
-        setScanInput('');
-        stopScanning();
+
+        // Ensure form data is clean and include reset flag
+        setData({
+            scan_input: '',
+            scan_step: 'student',
+            reset: true,
+        });
+
         post(route('librarian.scan'), {
-            data: { scan_input: '', scan_step: 'student', reset: true },
-            preserveState: true,
+            preserveState: false,
+            headers: {
+                'X-Debug-Source': 'handleReset',
+            },
             onSuccess: () => {
+                console.log('Reset successful');
+                reset();
+                setScanInput('');
+                setData({ scan_input: '', scan_step: 'student' });
                 showToast('success', 'Scan reset successfully.');
             },
             onError: (errors) => {
                 console.error('Reset errors:', errors);
-                showToast('error', 'Failed to reset scan state.');
+                showToast('error', errors.reset?.[0] || 'Failed to reset scan state.');
+                setScanInput('');
+                reset();
             },
         });
     };
 
     const handleClearAll = () => {
         console.log('Clearing all scan state');
-        reset();
-        setScanInput('');
-        stopScanning();
-        post(route('librarian.scan'), {
-            data: { clear_all: true },
-            preserveState: false,
-            onSuccess: () => {
-                setData({ scan_input: '', scan_step: 'student' });
-                showToast('success', 'All scan data cleared successfully.');
+
+        // Use router.post to send a specific payload, bypassing the useForm state.
+        router.post(
+            route('librarian.scan'),
+            {
+                // This is the data payload that will be sent
+                scan_input: '',
+                scan_step: 'student',
+                clear_all: true,
             },
-            onError: (errors) => {
-                console.error('Clear all errors:', errors);
-                showToast('error', 'Failed to clear scan data.');
+            {
+                preserveState: false,
+                headers: {
+                    'X-Debug-Source': 'handleClearAll',
+                },
+                onSuccess: () => {
+                    console.log('Clear all successful');
+                    reset(); // You can still use reset from your useForm hook
+                    setScanInput('');
+                    showToast('success', 'All scan data cleared successfully.');
+                },
+                onError: (errors) => {
+                    console.error('Clear all errors:', errors);
+                    showToast('error', errors.clear_all?.[0] || 'Failed to clear scan data.');
+                },
             },
-        });
+        );
     };
 
     return (
