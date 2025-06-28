@@ -41,6 +41,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/librarian/overdue', function () {
             return Inertia::render('librarian/overdue');
         })->name('librarian.overdue');
+
+        //Transactions
+        Route::get('/librarian/transactions', [TransactionController::class, 'index'])->name('librarian.transactions');
     });
 });
 
