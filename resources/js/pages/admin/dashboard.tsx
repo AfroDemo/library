@@ -17,21 +17,6 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats>({})
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    fetchDashboardStats()
-  }, [])
-
-  const fetchDashboardStats = async () => {
-    try {
-      const response = await axios.get("/api/admin/dashboard-stats")
-      setStats(response.data)
-    } catch (error) {
-      console.error("Failed to fetch dashboard stats:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const statCards = [
     {
       title: "Total Books",
