@@ -75,7 +75,35 @@ class DashboardController extends Controller
                 'success' => session('success', null),
             ]);
         } elseif ($user->role === 'student' || $user->role === 'staff') {
-            return Inertia::render('user/dashboard');
+            // Member statistics
+            $transactionsQuery = Transaction::where('user_id', $user->id);
+            $myBorrowedBooks = $transactionsQuery->whereNull('returned_at')->count();
+            $activeLoans = $myBorrowedBooks;
+            $overdueBooks = Transaction::where('user_id', $user->id)
+                ->whereNull('returned_at')
+                ->where('due_date', '<', Carbon::today())
+                ->count();
+            $returnedBooks = Transaction::where('user_id', $user->id)
+                ->whereNotNull('returned_at')
+                ->count();
+            $totalBorrowed = Transaction::where('user_id', $user->id)->count();
+
+            $stats = [
+                'myBorrowedBooks' => $totalBorrowed,
+                'activeLoans' => $activeLoans,
+                'overdueBooks' => $overdueBooks,
+                'returnedBooks' => $returnedBooks,
+            ];
+
+            // Optionally, you can also pass the user's transactions for the dashboard
+            $transactions = Transaction::where('user_id', $user->id)->orderByDesc('borrowed_at')->get();
+
+            return Inertia::render('user/dashboard', [
+                'stats' => $stats,
+                'transactions' => $transactions,
+                'success' => session('success', null),
+                'errors' => session('errors', []),
+            ]);
         }
 
         return redirect()->route('login');

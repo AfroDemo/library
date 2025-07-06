@@ -1,8 +1,7 @@
 'use client';
 import { Head, usePage } from '@inertiajs/react';
-import axios from 'axios';
 import { AlertTriangle, BookOpen, Calendar, CheckCircle, Clock, Search, User } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
 import type { BreadcrumbItem, DashboardStats, PageProps, Transaction } from '../../types';
 
@@ -12,30 +11,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function UserDashboard() {
-    const { auth } = usePage<PageProps>().props;
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [stats, setStats] = useState<DashboardStats>({});
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        fetchUserData();
-    }, []);
-
-    const fetchUserData = async () => {
-        try {
-            const [transactionsResponse, statsResponse] = await Promise.all([
-                axios.get('/api/user/transactions'),
-                axios.get('/api/user/dashboard-stats'),
-            ]);
-
-            setTransactions(transactionsResponse.data);
-            setStats(statsResponse.data);
-        } catch (error) {
-            console.error('Failed to fetch user data:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const {
+        auth,
+        stats: initialStats = {},
+        transactions: initialTransactions = [],
+    } = usePage<PageProps & { stats?: DashboardStats; transactions?: Transaction[] }>().props;
+    const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+    const [stats, setStats] = useState<DashboardStats>(initialStats);
+    const [isLoading, setIsLoading] = useState(false);
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString();
@@ -63,38 +46,41 @@ export default function UserDashboard() {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Books Borrowed</p>
-                                <p className="text-3xl font-bold text-gray-900">{isLoading ? '...' : stats.myBorrowedBooks || 0}</p>
+                                <p className="text-3xl font-bold text-gray-900">{stats.myBorrowedBooks ?? 0}</p>
                             </div>
                             <BookOpen className="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Active Loans</p>
-                                <p className="text-3xl font-bold text-gray-900">
-                                    {isLoading ? '...' : transactions.filter((t) => !t.returned_at).length}
-                                </p>
+                                <p className="text-sm font-medium text-gray-600">Active Borrowed Books</p>
+                                <p className="text-3xl font-bold text-green-600">{stats.activeLoans ?? 0}</p>
                             </div>
                             <Calendar className="h-8 w-8 text-green-600" />
                         </div>
                     </div>
-
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Overdue Books</p>
-                                <p className="text-3xl font-bold text-gray-900">
-                                    {isLoading ? '...' : transactions.filter((t) => !t.returned_at && isOverdue(t.due_date)).length}
-                                </p>
+                                <p className="text-3xl font-bold text-red-600">{stats.overdueBooks ?? 0}</p>
                             </div>
                             <Clock className="h-8 w-8 text-red-600" />
+                        </div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Returned Books</p>
+                                <p className="text-3xl font-bold text-gray-900">{stats.returnedBooks ?? 0}</p>
+                            </div>
+                            <CheckCircle className="h-8 w-8 text-gray-600" />
                         </div>
                     </div>
                 </div>

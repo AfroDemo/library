@@ -41,7 +41,7 @@ function getMainNavItems(role: string): NavItem[] {
         items.push(
             {
                 title: 'Manage Books',
-                href: '/books',
+                href: '/admin/books',
                 icon: BookOpen,
             },
             {

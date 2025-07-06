@@ -64,7 +64,7 @@ export interface Transaction {
     user_id?: number;
     book_id?: number;
     member_id?: string;
-    member_name?:string;
+    member_name?: string;
     book_title: string;
     book_isbn?: string;
     borrowed_at: string;
@@ -92,6 +92,7 @@ export interface ToastMessage {
 }
 
 export interface DashboardStats {
+    // Admin/Librarian
     totalBooks?: number;
     availableBooks?: number;
     borrowedBooks?: number;
@@ -99,5 +100,8 @@ export interface DashboardStats {
     totalTransactions?: number;
     overdueBooks?: number;
     activeTransactions?: number;
+    // Member (student/staff)
     myBorrowedBooks?: number;
+    activeLoans?: number;
+    returnedBooks?: number;
 }
