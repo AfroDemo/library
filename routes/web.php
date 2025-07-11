@@ -77,6 +77,12 @@ Route::middleware(['auth'])->group(function () {
         // Settings Management
         Route::get('/settings', [AdminController::class, 'settingsIndex'])->name('admin.settings.index');
         Route::post('/settings', [AdminController::class, 'settingsUpdate'])->name('admin.settings.update');
+
+        // Shelves Management
+        Route::get('/location', [AdminController::class, 'shelvesIndex'])->name('admin.shelves.index');
+        Route::post('/location', [AdminController::class, 'shelvesStore'])->name('admin.shelves.store');
+        Route::put('/location/{shelf}', [AdminController::class, 'shelvesUpdate'])->name('admin.shelves.update');
+        Route::delete('/location/{shelf}', [AdminController::class, 'shelvesDestroy'])->name('admin.shelves.destroy');
     });
 });
 

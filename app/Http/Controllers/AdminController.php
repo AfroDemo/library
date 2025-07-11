@@ -6,9 +6,11 @@ use App\Models\Book;
 use App\Models\User;
 use App\Models\Student;
 use App\Models\Shelf;
+use App\Models\Transaction;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AdminController extends Controller
@@ -326,5 +328,69 @@ class AdminController extends Controller
         Cache::forget('library_settings');
 
         return redirect()->route('admin.settings.index')->with('success', 'Settings updated successfully');
+    }
+
+    public function shelvesIndex(Request $request)
+    {
+        $query = Shelf::query();
+
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('floor', 'like', "%{$search}%")
+                    ->orWhere('shelf_number', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $shelves = $query->orderBy('floor')->orderBy('shelf_number')->paginate(20)->through(function ($shelf) {
+            return [
+                'id' => $shelf->id,
+                'floor' => $shelf->floor,
+                'shelf_number' => $shelf->shelf_number,
+                'description' => $shelf->description,
+                'book_count' => $shelf->books()->count(),
+            ];
+        });
+
+        return Inertia::render('admin/location', [
+            'shelves' => $shelves,
+            'filters' => $request->only(['search']),
+            'success' => session('success', null),
+            'errors' => session('errors', []),
+        ]);
+    }
+
+    public function shelvesStore(Request $request)
+    {
+        $validated = $request->validate([
+            'floor' => 'required|string|max:50',
+            'shelf_number' => 'required|string|max:50',
+            'description' => 'nullable|string|max:255',
+        ]);
+
+        Shelf::create($validated);
+
+        return redirect()->route('admin.shelves.index')->with('success', 'Shelf added successfully');
+    }
+
+    public function shelvesUpdate(Request $request, Shelf $shelf)
+    {
+        $validated = $request->validate([
+            'floor' => 'required|string|max:50',
+            'shelf_number' => 'required|string|max:50',
+            'description' => 'nullable|string|max:255',
+        ]);
+
+        $shelf->update($validated);
+
+        return redirect()->route('admin.shelves.index')->with('success', 'Shelf updated successfully');
+    }
+
+    public function shelvesDestroy(Shelf $shelf)
+    {
+        $shelf->delete();
+
+        return redirect()->route('admin.shelves.index')->with('success', 'Shelf deleted successfully');
     }
 }
