@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('isbn')->unique();
             $table->string('title');
             $table->string('author');
+            $table->unsignedBigInteger('shelf_id')->nullable();
             $table->boolean('available')->default(true);
             $table->foreign('shelf_id')->references('id')->on('shelves')->onDelete('set null');
             $table->timestamps();

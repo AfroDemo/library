@@ -27,7 +27,7 @@ interface BooksPageProps extends PageProps {
         search?: string;
         available?: string;
     };
-    shelves: Shelf[];
+    shelves: Shelf[] | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -36,7 +36,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function ManageBooks() {
-    const { books, filters, shelves, errors, success } = usePage<BooksPageProps>().props;
+    const { books, filters, shelves = [], errors, success } = usePage<BooksPageProps>().props;
     const [search, setSearch] = useState(filters.search || '');
     const [available, setAvailable] = useState(filters.available || '');
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -109,10 +109,16 @@ export default function ManageBooks() {
                     setIsModalOpen(false);
                     setEditingBook(null);
                 },
+                onError: (errors) => {
+                    Object.values(errors).forEach((error) => showToast('error', error));
+                },
             });
         } else {
             router.post(route('books.store'), form, {
                 onSuccess: () => setIsModalOpen(false),
+                onError: (errors) => {
+                    Object.values(errors).forEach((error) => showToast('error', error));
+                },
             });
         }
     };
@@ -242,183 +248,195 @@ export default function ManageBooks() {
                                                         <div className="text-sm font-medium text-gray-900">{book.title}</div>
                                                         <div className="text-sm text-gray-500">{book.author}</div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{book.isbn}</td>
-                                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                                                {book.shelf ? `${book.shelf.floor}, Shelf ${book.shelf.shelf_number}` : 'Not assigned'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                                        book.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                                    }`}
-                                                >
-                                                    {book.available ? 'Available' : 'Unavailable'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
-                                                <button
-                                                    onClick={() => openModal(book)}
-                                                    className="mr-4 text-blue-600 hover:text-blue-900"
-                                                    aria-label={`Edit book ${book.title}`}
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(book)}
-                                                    className="text-red-600 hover:text-red-900"
-                                                    aria-label={`Delete book ${book.title}`}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    ) : (
-                        <div className="p-8 text-center text-gray-500">
-                            <BookOpen className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-                            <p>No books found.</p>
-                        </div>
-                    )}
-
-                    {/* Pagination */}
-                    {books.last_page > 1 && (
-                        <div className="flex justify-center space-x-2 p-6">
-                            {books.links.map((link, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => handlePageChange(link.url)}
-                                    className={`rounded-lg px-4 py-2 ${
-                                        link.active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                                    disabled={!link.url}
-                                    aria-label={
-                                        link.label === '« Previous'
-                                            ? 'Previous page'
-                                            : link.label === 'Next »'
-                                              ? 'Next page'
-                                              : `Go to page ${link.label}`
-                                    }
-                                >
-                                    {link.label === '« Previous' ? 'Previous' : link.label === 'Next »' ? 'Next' : link.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Modal for Add/Edit Book */}
-                {isModalOpen && (
-                    <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
-                        <div className="w-full max-w-md rounded-lg bg-white p-6">
-                            <h2 className="mb-4 text-xl font-bold text-gray-900">{editingBook ? 'Edit Book' : 'Add Book'}</h2>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Title</label>
-                                    <input
-                                        type="text"
-                                        value={form.title}
-                                        onChange={(e) => setForm({ ...form, title: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                        aria-label="Book title"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Author</label>
-                                    <input
-                                        type="text"
-                                        value={form.author}
-                                        onChange={(e) => setForm({ ...form, author: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                        aria-label="Book author"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">ISBN</label>
-                                    <input
-                                        type="text"
-                                        value={form.isbn}
-                                        onChange={(e) => setForm({ ...form, isbn: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                        aria-label="Book ISBN"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Shelf Location</label>
-                                    <select
-                                        value={form.shelf_id}
-                                        onChange={(e) => setForm({ ...form, shelf_id: e.target.value })}
-                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                                        aria-label="Shelf location"
-                                    >
-                                        <option value="">Select a shelf</option>
-                                        {shelves.map((shelf) => (
-                                            <option key={shelf.id} value={shelf.id}>
-                                                {shelf.floor}, Shelf {shelf.shelf_number}
-                                            </option>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{book.isbn}</td>
+                                                <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                                                    {book.shelf ? `${book.shelf.floor}, Shelf ${book.shelf.shelf_number}` : 'Not assigned'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                                            book.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                        }`}
+                                                    >
+                                                        {book.available ? 'Available' : 'Unavailable'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
+                                                    <button
+                                                        onClick={() => openModal(book)}
+                                                        className="mr-4 text-blue-600 hover:text-blue-900"
+                                                        aria-label={`Edit book ${book.title}`}
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(book)}
+                                                        className="text-red-600 hover:text-red-900"
+                                                        aria-label={`Delete book ${book.title}`}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="flex items-center space-x-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.available}
-                                            onChange={(e) => setForm({ ...form, available: e.target.checked })}
-                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            aria-label="Book availability"
-                                        />
-                                        <span className="text-sm font-medium text-gray-700">Available</span>
-                                    </label>
-                                </div>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div className="mt-6 flex justify-end space-x-3">
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50"
-                                    aria-label="Cancel"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSubmit}
-                                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                                    aria-label={editingBook ? 'Update book' : 'Add book'}
-                                >
-                                    {editingBook ? 'Update' : 'Add'}
-                                </button>
+                        ) : (
+                            <div className="p-8 text-center text-gray-500">
+                                <BookOpen className="mx-auto mb-3 h-12 w-12 text-gray-300" />
+                                <p>No books found.</p>
                             </div>
-                        </div>
-                    </div>
-                )}
+                        )}
 
-                {/* Toast Notifications */}
-                <div className="fixed right-4 bottom-4 z-50 space-y-2">
-                    {toasts.map((toast) => (
-                        <div
-                            key={toast.id}
-                            className={`flex max-w-sm items-center space-x-3 rounded-lg border px-4 py-3 shadow-lg ${
-                                toast.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'
-                            }`}
-                        >
-                            {toast.type === 'success' && <div className="h-5 w-5 text-green-600">✔</div>}
-                            {toast.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600" />}
-                            <span className="text-sm font-medium">{toast.message}</span>
-                            <button
-                                onClick={() => removeToast(toast.id)}
-                                className="text-gray-400 hover:text-gray-600"
-                                aria-label="Close toast notification"
-                            >
-                                ×
-                            </button>
+                        {/* Pagination */}
+                        {books.last_page > 1 && (
+                            <div className="flex justify-center space-x-2 p-6">
+                                {books.links.map((link, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => handlePageChange(link.url)}
+                                        className={`rounded-lg px-4 py-2 ${
+                                            link.active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                        disabled={!link.url}
+                                        aria-label={
+                                            link.label === '« Previous'
+                                                ? 'Previous page'
+                                                : link.label === 'Next »'
+                                                  ? 'Next page'
+                                                  : `Go to page ${link.label}`
+                                        }
+                                    >
+                                        {link.label === '« Previous' ? 'Previous' : link.label === 'Next »' ? 'Next' : link.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modal for Add/Edit Book */}
+                    {isModalOpen && (
+                        <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
+                            <div className="w-full max-w-md rounded-lg bg-white p-6">
+                                <h2 className="mb-4 text-xl font-bold text-gray-900">{editingBook ? 'Edit Book' : 'Add Book'}</h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Title</label>
+                                        <input
+                                            type="text"
+                                            value={form.title}
+                                            onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                            aria-label="Book title"
+                                        />
+                                        {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Author</label>
+                                        <input
+                                            type="text"
+                                            value={form.author}
+                                            onChange={(e) => setForm({ ...form, author: e.target.value })}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                            aria-label="Book author"
+                                        />
+                                        {errors.author && <p className="mt-1 text-sm text-red-600">{errors.author}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">ISBN</label>
+                                        <input
+                                            type="text"
+                                            value={form.isbn}
+                                            onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                            aria-label="Book ISBN"
+                                        />
+                                        {errors.isbn && <p className="mt-1 text-sm text-red-600">{errors.isbn}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Shelf Location</label>
+                                        <select
+                                            value={form.shelf_id}
+                                            onChange={(e) => setForm({ ...form, shelf_id: e.target.value })}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                            aria-label="Shelf location"
+                                        >
+                                            <option value="">Select a shelf</option>
+                                            {shelves && shelves.length > 0 ? (
+                                                shelves.map((shelf) => (
+                                                    <option key={shelf.id} value={shelf.id}>
+                                                        {shelf.floor}, Shelf {shelf.shelf_number}
+                                                    </option>
+                                                ))
+                                            ) : (
+                                                <option value="" disabled>
+                                                    No shelves available
+                                                </option>
+                                            )}
+                                        </select>
+                                        {errors.shelf_id && <p className="mt-1 text-sm text-red-600">{errors.shelf_id}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.available}
+                                                onChange={(e) => setForm({ ...form, available: e.target.checked })}
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                aria-label="Book availability"
+                                            />
+                                            <span className="text-sm font-medium text-gray-700">Available</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="mt-6 flex justify-end space-x-3">
+                                    <button
+                                        onClick={() => {
+                                            setIsModalOpen(false);
+                                            setEditingBook(null);
+                                        }}
+                                        className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50"
+                                        aria-label="Cancel"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSubmit}
+                                        className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                                        aria-label={editingBook ? 'Update book' : 'Add book'}
+                                    >
+                                        {editingBook ? 'Update' : 'Add'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    ))}
+                    )}
+
+                    {/* Toast Notifications */}
+                    <div className="fixed right-4 bottom-4 z-50 space-y-2">
+                        {toasts.map((toast) => (
+                            <div
+                                key={toast.id}
+                                className={`flex max-w-sm items-center space-x-3 rounded-lg border px-4 py-3 shadow-lg ${
+                                    toast.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'
+                                }`}
+                            >
+                                {toast.type === 'success' && <div className="h-5 w-5 text-green-600">✔</div>}
+                                {toast.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600" />}
+                                <span className="text-sm font-medium">{toast.message}</span>
+                                <button
+                                    onClick={() => removeToast(toast.id)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                    aria-label="Close toast notification"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
-        </AppLayout>
-    );
+            </AppLayout>
+        );
 }
