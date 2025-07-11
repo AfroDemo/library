@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 17, 2025 at 11:22 AM
+-- Generation Time: Jul 06, 2025 at 12:55 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -42,16 +42,16 @@ CREATE TABLE `books` (
 --
 
 INSERT INTO `books` (`id`, `isbn`, `title`, `author`, `available`, `created_at`, `updated_at`) VALUES
-(1, '9780134685991', 'Effective Java', 'Joshua Bloch', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
+(1, '9780596009202', 'Effective Java', 'Joshua Bloch', 0, '2025-06-16 09:08:02', '2025-06-28 09:42:06'),
 (2, '9780596009205', 'Head First Design Patterns', 'Eric Freeman', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
-(3, '9780132350884', 'Clean Code', 'Robert C. Martin', 0, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
-(4, '9780201633610', 'Design Patterns', 'Gang of Four', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
+(3, '9780132350884', 'Clean Code', 'Robert C. Martin', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
+(4, '9780201633610', 'Design Patterns', 'Gang of Four', 0, '2025-06-16 09:08:02', '2025-06-28 00:57:42'),
 (5, '9780321125217', 'Domain-Driven Design', 'Eric Evans', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
-(6, '9780134494166', 'Clean Architecture', 'Robert C. Martin', 0, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
+(6, '9780134494166', 'Clean Architecture', 'Robert C. Martin', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
 (7, '9780596007126', 'The Art of Unix Programming', 'Eric S. Raymond', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
 (8, '9780321146533', 'Test Driven Development', 'Kent Beck', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
 (9, '9780201485677', 'Refactoring', 'Martin Fowler', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02'),
-(10, '9780135957059', 'The Pragmatic Programmer', 'David Thomas', 0, '2025-06-16 09:08:02', '2025-06-16 09:08:02');
+(10, '9780135957059', 'The Pragmatic Programmer', 'David Thomas', 1, '2025-06-16 09:08:02', '2025-06-16 09:08:02');
 
 -- --------------------------------------------------------
 
@@ -70,8 +70,11 @@ CREATE TABLE `cache` (
 --
 
 INSERT INTO `cache` (`key`, `value`, `expiration`) VALUES
-('library_cache_admin@adz.con|192.168.1.122', 'i:1;', 1750151652),
-('library_cache_admin@adz.con|192.168.1.122:timer', 'i:1750151652;', 1750151652);
+('library_cache_admin_dashboard_stats', 'a:10:{s:10:\"totalBooks\";i:10;s:14:\"availableBooks\";i:9;s:13:\"borrowedBooks\";i:1;s:13:\"totalStudents\";i:1;s:15:\"totalLibrarians\";i:1;s:10:\"totalUsers\";i:3;s:17:\"totalTransactions\";i:2;s:12:\"overdueBooks\";i:0;s:18:\"activeTransactions\";i:1;s:18:\"recentTransactions\";i:2;}', 1751114169),
+('library_cache_libralian@adz.com|127.0.0.1', 'i:1;', 1751115799),
+('library_cache_libralian@adz.com|127.0.0.1:timer', 'i:1751115799;', 1751115799),
+('library_cache_librarian@adz.com|127.0.0.1', 'i:2;', 1751115815),
+('library_cache_librarian@adz.com|127.0.0.1:timer', 'i:1751115815;', 1751115815);
 
 -- --------------------------------------------------------
 
@@ -192,12 +195,16 @@ CREATE TABLE `sessions` (
 --
 
 INSERT INTO `sessions` (`id`, `user_id`, `ip_address`, `user_agent`, `payload`, `last_activity`) VALUES
-('2INLhUOzzIM9qEduSZty6NZMYYDHHTM1WqU7GTLZ', 1, '192.168.1.122', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36', 'YTo1OntzOjY6Il90b2tlbiI7czo0MDoiZ045QjdkMFJnZ2pEQXNDNDhJRGNibUZ6YWxUbklmUXBnS0dHNU1kdiI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6MzU6Imh0dHA6Ly8xOTIuMTY4LjEuMTc5OjgwMDAvZGFzaGJvYXJkIjt9czo2OiJfZmxhc2giO2E6Mjp7czozOiJvbGQiO2E6MDp7fXM6MzoibmV3IjthOjA6e319czozOiJ1cmwiO2E6MDp7fXM6NTA6ImxvZ2luX3dlYl81OWJhMzZhZGRjMmIyZjk0MDE1ODBmMDE0YzdmNThlYTRlMzA5ODlkIjtpOjE7fQ==', 1750151847),
-('KAt2qV567zVyhXfU0jYBQBvlSFHtvvJf7W2IZFY2', 1, '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36', 'YTo1OntzOjY6Il90b2tlbiI7czo0MDoiQlhhUFNWUkxIdlZGMWtCdjU5SmlnWm1CWmNGSlFSM09FRWZvMjNuMyI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6MzE6Imh0dHA6Ly9sb2NhbGhvc3Q6ODAwMC9kYXNoYm9hcmQiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX1zOjM6InVybCI7YTowOnt9czo1MDoibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiO2k6MTt9', 1750141829),
-('mdT6DIepZt23Fk6YsUdQSDxz7Fijdjn1fWSUXB88', NULL, '192.168.1.122', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Falkon/24.01.75 QtWebEngine/5.15.16 Chrome/87.0.4280.144 Safari/537.36', 'YTo0OntzOjY6Il90b2tlbiI7czo0MDoiNWxBVXE2Qm9KYUhqdlhaNVZJYjBrUXM5UENjZzNuTHVrTU5NVnAzSiI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6MzE6Imh0dHA6Ly8xOTIuMTY4LjEuMTc5OjgwMDAvbG9naW4iO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX1zOjM6InVybCI7YToxOntzOjg6ImludGVuZGVkIjtzOjM1OiJodHRwOi8vMTkyLjE2OC4xLjE3OTo4MDAwL2Rhc2hib2FyZCI7fX0=', 1750151576),
-('wQgbYbPm2J4JnqFukI3Lt7nZ6lAluJn0tbTM3b6n', 1, '192.168.1.122', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:139.0) Gecko/20100101 Firefox/139.0', 'YTo1OntzOjY6Il90b2tlbiI7czo0MDoiMEZ6YUFHalFxRE5taUVwd2g5VVdyV2xIQW9Ld3ZBcU5nb05UbGtRdCI7czozOiJ1cmwiO2E6MDp7fXM6OToiX3ByZXZpb3VzIjthOjE6e3M6MzoidXJsIjtzOjMxOiJodHRwOi8vMTkyLjE2OC4xLjE3OTo4MDAwL2xvZ2luIjt9czo2OiJfZmxhc2giO2E6Mjp7czozOiJvbGQiO2E6MDp7fXM6MzoibmV3IjthOjA6e319czo1MDoibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiO2k6MTt9', 1750151607),
-('X5QO3h93JoCmIUOoT1TiCJQqgNig0EEhikpstnmG', 1, '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36', 'YTo1OntzOjY6Il90b2tlbiI7czo0MDoiRDZZS2NodGpkVEZIdXJEZXFwYWtWWlFQSUI1c2hTVTlGdXlwcWhkRCI7czozOiJ1cmwiO2E6MDp7fXM6OToiX3ByZXZpb3VzIjthOjE6e3M6MzoidXJsIjtzOjI3OiJodHRwOi8vbG9jYWxob3N0OjgwMDAvbG9naW4iO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX1zOjUwOiJsb2dpbl93ZWJfNTliYTM2YWRkYzJiMmY5NDAxNTgwZjAxNGM3ZjU4ZWE0ZTMwOTg5ZCI7aToxO30=', 1750151816),
-('z8Q6WwzS72PvQX4DpxjeXlOalcoazANgOGTtaJMU', 1, '192.168.1.104', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36', 'YTo1OntzOjY6Il90b2tlbiI7czo0MDoiQVJuclhpSlFWOEFJQjR0clFxQXNYV29CWnpsNW5HeUxJSllRU0lzYSI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6MzU6Imh0dHA6Ly8xOTIuMTY4LjEuMTc5OjgwMDAvZGFzaGJvYXJkIjt9czo2OiJfZmxhc2giO2E6Mjp7czozOiJvbGQiO2E6MDp7fXM6MzoibmV3IjthOjA6e319czozOiJ1cmwiO2E6MDp7fXM6NTA6ImxvZ2luX3dlYl81OWJhMzZhZGRjMmIyZjk0MDE1ODBmMDE0YzdmNThlYTRlMzA5ODlkIjtpOjE7fQ==', 1750141853);
+('9KACyzwIDZP4Peia7LvW3tnfng1WALU10LTucLQL', NULL, '127.0.0.1', 'Mozilla/5.0 (Linux; Android 7.0; SM-G930V Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.125 Mobile Safari/537.36 (compatible; Google-Read-Aloud; +https://support.google.com/webmasters/answer/1061943)', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoicDNPNEQyeko3WkdoQzJlUTE1cjBtdER4eHZ3bDRDREF4bWZndGdqYiI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751112744),
+('BrLzZGOZ245XtnUYF1DpymxpM7NhulWRIDpZLdtV', NULL, '127.0.0.1', 'WhatsApp/2.23.20.0', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoianE2d0k4a1NCTVJGOXNmem9McDlZMkNjOXREbG14ekVJemZLaHFDaSI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDY6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAvbG9naW4iO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751112476),
+('fqTB7ZAqcQPZQlZiLaVPhcLYbVTtowBui0T0JnS7', 3, '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36', 'YTo1OntzOjY6Il90b2tlbiI7czo0MDoibUpjcHF4N3lySHpxcmNseFN0QzlGOFdDQ25uVkZQTm1ybE1CclZ0QSI7czo2OiJfZmxhc2giO2E6Mjp7czozOiJvbGQiO2E6MDp7fXM6MzoibmV3IjthOjA6e319czozOiJ1cmwiO2E6MDp7fXM6OToiX3ByZXZpb3VzIjthOjE6e3M6MzoidXJsIjtzOjQ2OiJodHRwOi8vZGJhMi0xOTctMTg2LTI5LTM2Lm5ncm9rLWZyZWUuYXBwL2xvZ2luIjt9czo1MDoibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiO2k6Mzt9', 1751115789),
+('GwEo8QXvsdcEVDjQYUbF864y1vKbUW568CFBnSVw', NULL, '127.0.0.1', 'Mozilla/5.0 (Linux; Android 7.0; SM-G930V Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.125 Mobile Safari/537.36 (compatible; Google-Read-Aloud; +https://support.google.com/webmasters/answer/1061943)', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiNzBsTm9jZE9tNDFCYVU3VWk5aG0zdDFJczM5RUJPTXFQcUg2MGtNUSI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751112743),
+('isVFZjwqTC0ThrVQxTeDXFVFYSURjR8jzY57NYkk', NULL, '127.0.0.1', 'WhatsApp/2.23.20.0', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiTGJzdmVpOWpuSEJsMjBCbmh4ZWRGWHZZNENUQWNldDRRaklYVEVyMyI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751112478),
+('NxuIsAP4k3Y8dQZoCrQkUcok33CErX3UHTS98ByO', NULL, '127.0.0.1', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiVXlicEVoYTZ1VWRMMHZSWXZrNU9lZHRsVFVZNHJZTW5UZVZqeEo5NiI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751116177),
+('s302ptkgsgcNyxUUX4uCPg4K3n90kBwzd16jvozv', NULL, '127.0.0.1', 'Mozilla/5.0 (Linux; Android 7.0; SM-G930V Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.125 Mobile Safari/537.36 (compatible; Google-Read-Aloud; +https://support.google.com/webmasters/answer/1061943)', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiOW9VSEFKbGIzVWxqeW9YV0R3WWF4NlVnYkxQVTZMVzBqbjRQTG5ENyI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751112744),
+('s4ZDjVEnXlp8RNOTk1hM0vwvB1RendU7zZvpdelr', NULL, '127.0.0.1', 'WhatsApp/2.23.20.0', 'YTo0OntzOjY6Il90b2tlbiI7czo0MDoiTm1neGhhaWlSQXRKSE5tYWhDdWw1ZFlBRFJTelVkOXlDWEJzSG5xRSI7czozOiJ1cmwiO2E6MTp7czo4OiJpbnRlbmRlZCI7czo1MjoiaHR0cDovL2RiYTItMTk3LTE4Ni0yOS0zNi5uZ3Jvay1mcmVlLmFwcC9hZG1pbi9ib29rcyI7fXM6OToiX3ByZXZpb3VzIjthOjE6e3M6MzoidXJsIjtzOjUyOiJodHRwOi8vZGJhMi0xOTctMTg2LTI5LTM2Lm5ncm9rLWZyZWUuYXBwL2FkbWluL2Jvb2tzIjt9czo2OiJfZmxhc2giO2E6Mjp7czozOiJvbGQiO2E6MDp7fXM6MzoibmV3IjthOjA6e319fQ==', 1751112474),
+('UMgHsoybY3y8DyKk7sBx4MIx4YaPlOX6KTHXt0Ru', NULL, '127.0.0.1', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoiaWhRamJGYmZ0bW04WXkzRE5Ec0VkbDFnQ3piakJvczlSUmkzN3ZwZiI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751113373),
+('VaqdCIMXii34sRcLldp5pRLrJkwhhyWLVixEXIq2', NULL, '127.0.0.1', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36', 'YTozOntzOjY6Il90b2tlbiI7czo0MDoicVVBekUydnd5ZTlyU3pBZXlpNEFZUjdTNDdCYkJrTW1BT0NtOW5vMSI7czo5OiJfcHJldmlvdXMiO2E6MTp7czozOiJ1cmwiO3M6NDA6Imh0dHA6Ly9kYmEyLTE5Ny0xODYtMjktMzYubmdyb2stZnJlZS5hcHAiO31zOjY6Il9mbGFzaCI7YToyOntzOjM6Im9sZCI7YTowOnt9czozOiJuZXciO2E6MDp7fX19', 1751112801);
 
 -- --------------------------------------------------------
 
@@ -208,11 +215,17 @@ INSERT INTO `sessions` (`id`, `user_id`, `ip_address`, `user_agent`, `payload`, 
 CREATE TABLE `students` (
   `id` bigint(20) UNSIGNED NOT NULL,
   `user_id` bigint(20) UNSIGNED NOT NULL,
-  `student_id` varchar(255) NOT NULL,
-  `study_year` date DEFAULT NULL,
+  `member_id` varchar(255) NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `students`
+--
+
+INSERT INTO `students` (`id`, `user_id`, `member_id`, `created_at`, `updated_at`) VALUES
+(1, 2, '22100533590050', '2025-06-22 10:51:43', '2025-06-22 10:51:43');
 
 -- --------------------------------------------------------
 
@@ -230,6 +243,15 @@ CREATE TABLE `transactions` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `transactions`
+--
+
+INSERT INTO `transactions` (`id`, `user_id`, `book_id`, `borrowed_at`, `due_date`, `returned_at`, `created_at`, `updated_at`) VALUES
+(1, 2, 1, '2025-06-28', '2025-07-12', '2025-06-28', '2025-06-27 23:43:52', '2025-06-28 01:51:53'),
+(2, 2, 4, '2025-06-28', '2025-07-12', NULL, '2025-06-28 00:57:42', '2025-06-28 00:57:42'),
+(3, 2, 1, '2025-06-28', '2025-07-12', NULL, '2025-06-28 09:42:06', '2025-06-28 09:42:06');
 
 -- --------------------------------------------------------
 
@@ -254,7 +276,9 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `email_verified_at`, `password`, `role`, `remember_token`, `created_at`, `updated_at`) VALUES
-(1, 'admin', 'admin@adz.com', NULL, '$2y$12$vcCQVeCcHteiSO15VcfblupTuVOK6.WZfAka8gKfZZ5bVA51QfYNi', 'librarian', NULL, '2025-06-14 22:07:58', '2025-06-14 22:07:58');
+(1, 'admin', 'admin@adz.com', NULL, '$2y$12$vcCQVeCcHteiSO15VcfblupTuVOK6.WZfAka8gKfZZ5bVA51QfYNi', 'admin', NULL, '2025-06-14 22:07:58', '2025-06-14 22:07:58'),
+(2, 'student', 'student@adz.com', NULL, '$2y$12$vcCQVeCcHteiSO15VcfblupTuVOK6.WZfAka8gKfZZ5bVA51QfYNi', 'student', NULL, '2025-06-22 07:50:03', '2025-06-22 07:50:03'),
+(3, 'mkindi', 'mkindi@adz.com', NULL, '$2y$12$y7TO/td.RVHOD58D0YBvne598B0c6tGOqFMVOfUWJS8H0xV7ptXEa', 'librarian', NULL, '2025-06-28 06:13:00', '2025-06-28 06:13:00');
 
 --
 -- Indexes for dumped tables
@@ -324,7 +348,7 @@ ALTER TABLE `sessions`
 --
 ALTER TABLE `students`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `students_student_id_unique` (`student_id`),
+  ADD UNIQUE KEY `students_student_id_unique` (`member_id`),
   ADD KEY `students_user_id_foreign` (`user_id`);
 
 --
@@ -374,19 +398,19 @@ ALTER TABLE `migrations`
 -- AUTO_INCREMENT for table `students`
 --
 ALTER TABLE `students`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `transactions`
 --
 ALTER TABLE `transactions`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- Constraints for dumped tables
