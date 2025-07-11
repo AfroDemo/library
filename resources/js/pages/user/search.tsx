@@ -1,3 +1,5 @@
+'use client';
+
 import { Head, usePage } from '@inertiajs/react';
 import { BookOpen, Search } from 'lucide-react';
 import { useState } from 'react';
@@ -78,6 +80,9 @@ export default function UserBookSearch() {
                                         <div className="font-medium text-gray-900">{book.title}</div>
                                         <div className="text-sm text-gray-500">{book.author}</div>
                                         <div className="text-sm text-gray-500">ISBN: {book.isbn}</div>
+                                        <div className="text-sm text-gray-500">
+                                            Location: {book.shelf ? `${book.shelf.floor}, Shelf ${book.shelf.shelf_number}` : 'Not assigned'}
+                                        </div>
                                     </div>
                                     <div>
                                         {book.available ? (

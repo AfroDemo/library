@@ -4,7 +4,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { AlertTriangle, BookOpen, Download, Edit, Search, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { BreadcrumbItem, PageProps, ToastMessage } from '../../types';
+import type { BreadcrumbItem, PageProps, Shelf, ToastMessage } from '../../types';
 
 interface Book {
     id: number;
@@ -12,6 +12,7 @@ interface Book {
     author: string;
     isbn: string;
     available: boolean;
+    shelf?: Shelf;
 }
 
 interface BooksPageProps extends PageProps {
@@ -26,21 +27,22 @@ interface BooksPageProps extends PageProps {
         search?: string;
         available?: string;
     };
+    shelves: Shelf[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Manage Books', href: '/admin/books' },
+    { title: 'Manage Books', href: '/librarian/books' },
 ];
 
 export default function ManageBooks() {
-    const { books, filters, errors, success } = usePage<BooksPageProps>().props;
+    const { books, filters, shelves, errors, success } = usePage<BooksPageProps>().props;
     const [search, setSearch] = useState(filters.search || '');
     const [available, setAvailable] = useState(filters.available || '');
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingBook, setEditingBook] = useState<Book | null>(null);
-    const [form, setForm] = useState({ title: '', author: '', isbn: '', available: true });
+    const [form, setForm] = useState({ title: '', author: '', isbn: '', shelf_id: '', available: true });
 
     useEffect(() => {
         if (success) showToast('success', success);
@@ -60,7 +62,7 @@ export default function ManageBooks() {
     };
 
     const handleFilterChange = () => {
-        router.get(route('admin.books.index'), { search, available }, { preserveState: true, replace: true });
+        router.get(route('books.index'), { search, available }, { preserveState: true, replace: true });
     };
 
     const handlePageChange = (url: string | null) => {
@@ -69,8 +71,16 @@ export default function ManageBooks() {
 
     const exportBooks = () => {
         const csvContent = [
-            ['ID', 'Title', 'Author', 'ISBN', 'Available'],
-            ...books.data.map((book) => [book.id, book.title, book.author, book.isbn, book.available ? 'Yes' : 'No']),
+            ['ID', 'Title', 'Author', 'ISBN', 'Available', 'Floor', 'Shelf Number'],
+            ...books.data.map((book) => [
+                book.id,
+                book.title,
+                book.author,
+                book.isbn,
+                book.available ? 'Yes' : 'No',
+                book.shelf?.floor || 'N/A',
+                book.shelf?.shelf_number || 'N/A',
+            ]),
         ];
         const csv = csvContent.map((row) => row.map((field) => `"${field}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -86,22 +96,22 @@ export default function ManageBooks() {
         setEditingBook(book);
         setForm(
             book
-                ? { title: book.title, author: book.author, isbn: book.isbn, available: book.available }
-                : { title: '', author: '', isbn: '', available: true },
+                ? { title: book.title, author: book.author, isbn: book.isbn, shelf_id: book.shelf?.id.toString() || '', available: book.available }
+                : { title: '', author: '', isbn: '', shelf_id: '', available: true },
         );
         setIsModalOpen(true);
     };
 
     const handleSubmit = () => {
         if (editingBook) {
-            router.put(route('admin.books.update', editingBook.id), form, {
+            router.put(route('books.update', editingBook.id), form, {
                 onSuccess: () => {
                     setIsModalOpen(false);
                     setEditingBook(null);
                 },
             });
         } else {
-            router.post(route('admin.books.store'), form, {
+            router.post(route('books.store'), form, {
                 onSuccess: () => setIsModalOpen(false),
             });
         }
@@ -109,7 +119,7 @@ export default function ManageBooks() {
 
     const handleDelete = (book: Book) => {
         if (confirm('Are you sure you want to delete this book?')) {
-            router.delete(route('admin.books.destroy', book.id));
+            router.delete(route('books.destroy', book.id));
         }
     };
 
@@ -212,6 +222,9 @@ export default function ManageBooks() {
                                             ISBN
                                         </th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                                            Location
+                                        </th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                                             Status
                                         </th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
@@ -232,6 +245,9 @@ export default function ManageBooks() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{book.isbn}</td>
+                                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                                                {book.shelf ? `${book.shelf.floor}, Shelf ${book.shelf.shelf_number}` : 'Not assigned'}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span
                                                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -330,6 +346,22 @@ export default function ManageBooks() {
                                         className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                         aria-label="Book ISBN"
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Shelf Location</label>
+                                    <select
+                                        value={form.shelf_id}
+                                        onChange={(e) => setForm({ ...form, shelf_id: e.target.value })}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                        aria-label="Shelf location"
+                                    >
+                                        <option value="">Select a shelf</option>
+                                        {shelves.map((shelf) => (
+                                            <option key={shelf.id} value={shelf.id}>
+                                                {shelf.floor}, Shelf {shelf.shelf_number}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="flex items-center space-x-2">

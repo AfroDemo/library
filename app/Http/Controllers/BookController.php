@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Book;
+use App\Models\Shelf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -10,7 +11,7 @@ class BookController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Book::query();
+        $query = Book::query()->with('shelf');
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -26,16 +27,20 @@ class BookController extends Controller
         }
 
         $books = $query->orderBy('title')->paginate(20);
+        $shelves = Shelf::select('id', 'floor', 'shelf_number')->get();
 
         return Inertia::render('librarian/books/index', [
             'books' => $books,
             'filters' => $request->only(['search', 'available']),
+            'shelves' => $shelves,
+            'success' => session('success', null),
+            'errors' => session('errors', []),
         ]);
     }
 
     public function getBooks(Request $request)
     {
-        $query = Book::query();
+        $query = Book::query()->with('shelf');
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -60,7 +65,11 @@ class BookController extends Controller
 
     public function create()
     {
-        return Inertia::render('librarian/books/create');
+        $shelves = Shelf::select('id', 'floor', 'shelf_number')->get();
+
+        return Inertia::render('librarian/books/create', [
+            'shelves' => $shelves,
+        ]);
     }
 
     public function store(Request $request)
@@ -69,6 +78,7 @@ class BookController extends Controller
             'isbn' => 'required|string|unique:books,isbn',
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
+            'shelf_id' => 'nullable|exists:shelves,id',
             'available' => 'boolean',
         ]);
 
@@ -80,7 +90,7 @@ class BookController extends Controller
 
     public function show(Book $book)
     {
-        $book->load(['transactions.user']);
+        $book->load(['transactions.user', 'shelf']);
 
         return Inertia::render('librarian/books/show', [
             'book' => $book,
@@ -89,8 +99,11 @@ class BookController extends Controller
 
     public function edit(Book $book)
     {
+        $shelves = Shelf::select('id', 'floor', 'shelf_number')->get();
+
         return Inertia::render('librarian/books/edit', [
             'book' => $book,
+            'shelves' => $shelves,
         ]);
     }
 
@@ -100,6 +113,7 @@ class BookController extends Controller
             'isbn' => 'required|string|unique:books,isbn,' . $book->id,
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
+            'shelf_id' => 'nullable|exists:shelves,id',
             'available' => 'boolean',
         ]);
 
@@ -111,7 +125,6 @@ class BookController extends Controller
 
     public function destroy(Book $book)
     {
-        // Check if book has active transactions
         if ($book->transactions()->whereNull('returned_at')->exists()) {
             return redirect()->route('books.index')
                 ->with('error', 'Cannot delete book with active transactions.');

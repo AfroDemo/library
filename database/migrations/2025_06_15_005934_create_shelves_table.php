@@ -11,13 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('books', function (Blueprint $table) {
+        Schema::create('shelves', function (Blueprint $table) {
             $table->id();
-            $table->string('isbn')->unique();
-            $table->string('title');
-            $table->string('author');
-            $table->boolean('available')->default(true);
-            $table->foreign('shelf_id')->references('id')->on('shelves')->onDelete('set null');
+            $table->string('floor', 50);
+            $table->string('shelf_number', 50);
+            $table->string('description')->nullable();
             $table->timestamps();
         });
     }
@@ -27,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('books');
+        Schema::dropIfExists('shelves');
     }
 };

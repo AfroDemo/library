@@ -51,12 +51,20 @@ export interface Student {
     email: string;
 }
 
+export interface Shelf {
+    id: number;
+    floor: string;
+    shelf_number: string;
+    description?: string;
+}
+
 export interface Book {
     id: number;
     isbn: string;
     title: string;
     author: string;
     available: boolean;
+    shelf?: Shelf;
 }
 
 export interface Fine {
