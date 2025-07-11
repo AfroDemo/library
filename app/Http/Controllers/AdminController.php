@@ -5,18 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Book;
 use App\Models\User;
 use App\Models\Student;
-use App\Models\Transaction;
+use App\Models\Shelf;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class AdminController extends Controller
 {
     public function booksIndex(Request $request)
     {
-        $query = Book::query();
+        $query = Book::query()->with('shelf');
 
         if ($request->has('search') && $request->search) {
             $search = $request->search;
@@ -31,19 +30,27 @@ class AdminController extends Controller
             $query->where('available', $request->available === 'true');
         }
 
-        $books = $query->paginate(20)->through(function ($book) {
+        $books = $query->orderBy('title')->paginate(20)->through(function ($book) {
             return [
                 'id' => $book->id,
                 'title' => $book->title,
                 'author' => $book->author,
                 'isbn' => $book->isbn,
                 'available' => $book->available,
+                'shelf' => $book->shelf ? [
+                    'id' => $book->shelf->id,
+                    'floor' => $book->shelf->floor,
+                    'shelf_number' => $book->shelf->shelf_number,
+                ] : null,
             ];
         });
+
+        $shelves = Shelf::select('id', 'floor', 'shelf_number')->get();
 
         return Inertia::render('admin/books', [
             'books' => $books,
             'filters' => $request->only(['search', 'available']),
+            'shelves' => $shelves->toArray(),
             'success' => session('success', null),
             'errors' => session('errors', []),
         ]);
@@ -55,6 +62,7 @@ class AdminController extends Controller
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
             'isbn' => 'required|string|size:10|unique:books,isbn',
+            'shelf_id' => 'nullable|exists:shelves,id',
             'available' => 'boolean',
         ]);
 
@@ -69,6 +77,7 @@ class AdminController extends Controller
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
             'isbn' => 'required|string|size:10|unique:books,isbn,' . $book->id,
+            'shelf_id' => 'nullable|exists:shelves,id',
             'available' => 'boolean',
         ]);
 

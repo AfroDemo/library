@@ -32,7 +32,7 @@ class BookController extends Controller
         return Inertia::render('librarian/books/index', [
             'books' => $books,
             'filters' => $request->only(['search', 'available']),
-            'shelves' => $shelves->toArray(), // Ensure shelves is an array
+            'shelves' => $shelves->toArray(),
             'success' => session('success', null),
             'errors' => session('errors', []),
         ]);
@@ -85,16 +85,6 @@ class BookController extends Controller
 
         return Inertia::render('librarian/books/show', [
             'book' => $book,
-        ]);
-    }
-
-    public function edit(Book $book)
-    {
-        $shelves = Shelf::select('id', 'floor', 'shelf_number')->get();
-
-        return Inertia::render('librarian/books/edit', [
-            'book' => $book,
-            'shelves' => $shelves->toArray(),
         ]);
     }
 
