@@ -228,38 +228,34 @@ class DashboardController extends Controller
             ->where('paid', false)
             ->sum('amount');
 
-        if ($activeLoans === 0 && $unpaidFines === 0) {
-            return Inertia::render('librarian/dashboard', [
-                'stats' => session('stats', []),
-                'student' => session('student', null),
-                'book' => session('book', null),
-                'scanStep' => session('scan_step', 'student'),
-                'clearance' => [
-                    'isCleared' => true,
-                    'message' => 'Student is cleared. No active loans or unpaid fines.',
-                ],
-                'success' => session('success', null),
-                'errors' => session('errors', []),
-            ]);
-        }
-
-        $message = 'Student is not cleared due to outstanding issues.';
-        return Inertia::render('librarian/dashboard', [
+        $response = [
             'stats' => session('stats', []),
             'student' => session('student', null),
             'book' => session('book', null),
             'scanStep' => session('scan_step', 'student'),
-            'clearance' => [
+            'success' => session('success', null),
+            'errors' => session('errors', []),
+        ];
+
+        if ($activeLoans === 0 && $unpaidFines === 0) {
+            Log::info('Clearance check passed:', ['member_id' => $request->member_id]);
+            $response['clearance'] = [
+                'isCleared' => true,
+                'message' => 'Student is cleared. No active loans or unpaid fines.',
+            ];
+        } else {
+            Log::info('Clearance check failed:', ['member_id' => $request->member_id, 'activeLoans' => $activeLoans, 'unpaidFines' => $unpaidFines]);
+            $response['clearance'] = [
                 'isCleared' => false,
-                'message' => $message,
+                'message' => 'Student is not cleared due to outstanding issues.',
                 'details' => [
                     'activeLoans' => $activeLoans,
                     'unpaidFines' => $unpaidFines,
                 ],
-            ],
-            'success' => session('success', null),
-            'errors' => session('errors', []),
-        ]);
+            ];
+        }
+
+        return Inertia::render('librarian/dashboard', $response);
     }
 
     protected function parseStudentId(string $input): string
