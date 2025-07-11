@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Book;
 use App\Models\Student;
 use App\Models\Transaction;
+use App\Models\Fine;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -26,7 +27,6 @@ class DashboardController extends Controller
         }
 
         if ($user->role === 'admin') {
-            // Cache admin stats for 5 minutes to reduce database load
             $stats = Cache::remember('admin_dashboard_stats', 300, function () {
                 $today = Carbon::today();
 
@@ -75,7 +75,6 @@ class DashboardController extends Controller
                 'success' => session('success', null),
             ]);
         } elseif ($user->role === 'student' || $user->role === 'staff') {
-            // Member statistics
             $transactionsQuery = Transaction::where('user_id', $user->id);
             $myBorrowedBooks = $transactionsQuery->whereNull('returned_at')->count();
             $activeLoans = $myBorrowedBooks;
@@ -95,7 +94,6 @@ class DashboardController extends Controller
                 'returnedBooks' => $returnedBooks,
             ];
 
-            // Optionally, you can also pass the user's transactions for the dashboard
             $transactions = Transaction::where('user_id', $user->id)->orderByDesc('borrowed_at')->get();
 
             return Inertia::render('user/dashboard', [
@@ -114,7 +112,6 @@ class DashboardController extends Controller
         $reset = $request->boolean('reset', false);
         $clearAll = $request->boolean('clear_all', false);
 
-        // Bypass validation for reset and clear_all actions
         if (!$reset && !$clearAll) {
             $request->validate([
                 'scan_input' => 'required|string',
@@ -168,7 +165,6 @@ class DashboardController extends Controller
             ]);
         }
 
-        // Book scan
         if (strlen($scanInput) !== 10 && strlen($scanInput) !== 13) {
             Log::error('Invalid ISBN length:', ['isbn' => $scanInput]);
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Invalid ISBN format. ISBN must be 10 or 13 digits.']);
@@ -197,7 +193,6 @@ class DashboardController extends Controller
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Please scan student ID first']);
         }
 
-        // Store book details in session and move to confirm step
         session()->put('book', [
             'isbn' => $book->isbn,
             'title' => $book->title,
@@ -209,6 +204,61 @@ class DashboardController extends Controller
         Log::info('Book found, setting scan_step to confirm:', ['isbn' => $scanInput]);
         return redirect()->route('dashboard')->with([
             'success' => "Book \"{$book->title}\" loaded successfully, please confirm borrowing",
+        ]);
+    }
+
+    public function checkClearance(Request $request)
+    {
+        $request->validate([
+            'member_id' => 'required|string|exists:students,member_id',
+        ]);
+
+        $student = Student::where('member_id', $request->member_id)->with('user')->first();
+
+        if (!$student) {
+            Log::error('Student not found for clearance check:', ['member_id' => $request->member_id]);
+            return redirect()->route('dashboard')->withErrors(['member_id' => 'Student not found']);
+        }
+
+        $activeLoans = Transaction::where('user_id', $student->user_id)
+            ->whereNull('returned_at')
+            ->count();
+
+        $unpaidFines = Fine::where('user_id', $student->user_id)
+            ->where('paid', false)
+            ->sum('amount');
+
+        if ($activeLoans === 0 && $unpaidFines === 0) {
+            return Inertia::render('librarian/dashboard', [
+                'stats' => session('stats', []),
+                'student' => session('student', null),
+                'book' => session('book', null),
+                'scanStep' => session('scan_step', 'student'),
+                'clearance' => [
+                    'isCleared' => true,
+                    'message' => 'Student is cleared. No active loans or unpaid fines.',
+                ],
+                'success' => session('success', null),
+                'errors' => session('errors', []),
+            ]);
+        }
+
+        $message = 'Student is not cleared due to outstanding issues.';
+        return Inertia::render('librarian/dashboard', [
+            'stats' => session('stats', []),
+            'student' => session('student', null),
+            'book' => session('book', null),
+            'scanStep' => session('scan_step', 'student'),
+            'clearance' => [
+                'isCleared' => false,
+                'message' => $message,
+                'details' => [
+                    'activeLoans' => $activeLoans,
+                    'unpaidFines' => $unpaidFines,
+                ],
+            ],
+            'success' => session('success', null),
+            'errors' => session('errors', []),
         ]);
     }
 

@@ -6,7 +6,7 @@ import { AlertCircle, BookOpen, CheckCircle, Clock, RefreshCw, Scan, Trash2, Tre
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { Book, BreadcrumbItem, DashboardStats, PageProps, Student, ToastMessage } from '../../types';
+import type { BreadcrumbItem, DashboardStats, PageProps, Student, ToastMessage } from '../../types';
 
 type ScanStep = 'student' | 'book' | 'confirm';
 
@@ -22,16 +22,12 @@ interface Props extends PageProps {
     scanStep: ScanStep;
     errors: Record<string, string>;
     success: string | null;
-    [key: string]: any;
 }
 
 export default function LibrarianDashboard() {
     const { auth, stats, student: initialStudent, book: initialBook, scanStep: initialScanStep, errors, success } = usePage<Props>().props;
-
-    // Debugging: Log props on every render
     console.log('Received props:', { scanStep: initialScanStep, student: initialStudent, book: initialBook, success, errors });
 
-    // Scanning state
     const [scanInput, setScanInput] = useState('');
     const [isScanning, setIsScanning] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
@@ -39,43 +35,55 @@ export default function LibrarianDashboard() {
     const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
     const [isMobile, setIsMobile] = useState<boolean>(false);
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [clearanceStatus, setClearanceStatus] = useState<{
+        isCleared: boolean;
+        message: string;
+        details?: { activeLoans: number; unpaidFines: number };
+    } | null>(null);
+    const [isClearanceModalOpen, setIsClearanceModalOpen] = useState(false);
+    const [clearanceScanInput, setClearanceScanInput] = useState('');
+    const [isClearanceScanning, setIsClearanceScanning] = useState(false);
+    const [clearanceCameraError, setClearanceCameraError] = useState<string | null>(null);
     const lastToastTimeRef = useRef<number>(0);
 
-    // Inertia form
     const { data, setData, post, processing, reset } = useForm({
         scan_input: '',
         scan_step: initialScanStep,
     });
 
-    const scannerRef = useRef<Html5Qrcode | null>(null);
-    const scannerContainerRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const {
+        data: clearanceData,
+        setData: setClearanceData,
+        post: clearancePost,
+        processing: clearanceProcessing,
+        reset: clearanceReset,
+    } = useForm({
+        member_id: '',
+    });
 
-    // Sync form's scan_step with initialScanStep
+    const scannerRef = useRef<Html5Qrcode | null>(null);
+    const clearanceScannerRef = useRef<Html5Qrcode | null>(null);
+    const scannerContainerRef = useRef<HTMLDivElement>(null);
+    const clearanceScannerContainerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const clearanceInputRef = useRef<HTMLInputElement>(null);
+
     useEffect(() => {
         console.log('initialScanStep changed:', initialScanStep);
         setData('scan_step', initialScanStep);
     }, [initialScanStep, setData]);
 
     useEffect(() => {
-        // Detect mobile device
-        const userAgent = navigator.userAgent.toLowerCase();
-        setIsMobile(/mobile|android|iphone|ipad|tablet/i.test(userAgent));
-
-        // Initialize html5-qrcode only for 'student' or 'book' steps
+        setIsMobile(/mobile|android|iphone|ipad|tablet/i.test(navigator.userAgent.toLowerCase()));
         if (initialScanStep !== 'confirm') {
             if (!scannerRef.current) {
                 scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
             }
             loadCameras();
         }
-
-        // Focus input if not in confirm step
         if (initialScanStep !== 'confirm' && inputRef.current) {
             inputRef.current.focus();
         }
-
-        // Show toasts for success and errors
         if (success) {
             showToast('success', success);
         }
@@ -85,9 +93,9 @@ export default function LibrarianDashboard() {
         if (errors.student_id || errors.book_isbn) {
             showToast('error', errors.student_id?.[0] || errors.book_isbn?.[0] || 'Validation error occurred.');
         }
-
         return () => {
             stopScanning();
+            stopClearanceScanning();
             if (initialScanStep === 'confirm' && scannerRef.current) {
                 scannerRef.current = null;
             }
@@ -95,8 +103,10 @@ export default function LibrarianDashboard() {
     }, [success, errors, initialScanStep]);
 
     const loadCameras = async () => {
-        if (!scannerRef.current) return;
-
+        if (!scannerRef.current || !clearanceScannerRef.current) {
+            scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
+            clearanceScannerRef.current = new Html5Qrcode('clearance-scanner-container', { verbose: true });
+        }
         try {
             const devices = await Html5Qrcode.getCameras();
             console.log('Available cameras:', devices);
@@ -105,7 +115,6 @@ export default function LibrarianDashboard() {
                 label: device.label || `Camera ${device.id}`,
             }));
             setCameraDevices(formattedDevices);
-
             if (devices.length > 0) {
                 const rearCamera =
                     devices.find(
@@ -117,10 +126,12 @@ export default function LibrarianDashboard() {
                 setSelectedCamera(rearCamera.id);
                 if (isMobile && devices.length === 1 && rearCamera.label?.toLowerCase().includes('front')) {
                     setCameraError('Only front camera detected. For best results, use the rear camera or manual input.');
+                    setClearanceCameraError('Only front camera detected. For best results, use the rear camera or manual input.');
                     showToast('info', 'Only front camera detected. Rear camera is recommended for scanning.');
                 }
             } else {
                 setCameraError('No camera found. Please connect a camera or use manual input.');
+                setClearanceCameraError('No camera found. Please connect a camera or use manual input.');
             }
         } catch (err: any) {
             console.error('Camera access error:', err.name, err.message);
@@ -132,6 +143,7 @@ export default function LibrarianDashboard() {
                 errorMessage = 'No camera found. Please connect a camera or use manual input.';
             }
             setCameraError(errorMessage);
+            setClearanceCameraError(errorMessage);
             showToast('error', errorMessage);
         }
     };
@@ -139,10 +151,7 @@ export default function LibrarianDashboard() {
     const parseStudentId = (scannedText: string): string => {
         console.log('Parsing QR code:', scannedText);
         const parts = scannedText.split('|');
-        if (parts.length === 3) {
-            return parts[1];
-        }
-        return scannedText;
+        return parts.length === 3 ? parts[1] : scannedText;
     };
 
     const startScanning = async () => {
@@ -150,18 +159,15 @@ export default function LibrarianDashboard() {
             setCameraError('No camera selected. Please select a camera or use manual input.');
             return;
         }
-
         try {
             setIsScanning(true);
             setCameraError(null);
-
             await scannerRef.current.start(
                 selectedCamera,
                 {
                     fps: 15,
                     qrbox: { width: 300, height: 300 },
                     aspectRatio: isMobile ? 1.777 : undefined,
-                    // @ts-expect-error: experimentalFeatures is not in the type but supported by html5-qrcode
                     experimentalFeatures: {
                         useBarCodeDetectorIfSupported: true,
                     },
@@ -186,7 +192,6 @@ export default function LibrarianDashboard() {
                     }
                 },
             );
-
             setTimeout(() => {
                 if (isScanning) {
                     stopScanning();
@@ -210,6 +215,64 @@ export default function LibrarianDashboard() {
         }
     };
 
+    const startClearanceScanning = async () => {
+        if (!clearanceScannerRef.current || !clearanceScannerContainerRef.current || !selectedCamera) {
+            setClearanceCameraError('No camera selected. Please select a camera or use manual input.');
+            return;
+        }
+        try {
+            setIsClearanceScanning(true);
+            setClearanceCameraError(null);
+            await clearanceScannerRef.current.start(
+                selectedCamera,
+                {
+                    fps: 15,
+                    qrbox: { width: 300, height: 300 },
+                    aspectRatio: isMobile ? 1.777 : undefined,
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true,
+                    },
+                },
+                (decodedText) => {
+                    console.log('Clearance scan text:', decodedText);
+                    const studentId = parseStudentId(decodedText);
+                    setClearanceScanInput(studentId);
+                    setClearanceData('member_id', studentId);
+                    handleClearanceSubmit({ preventDefault: () => {} } as React.FormEvent);
+                    stopClearanceScanning();
+                },
+                (errorMessage) => {
+                    const now = Date.now();
+                    if (now - lastToastTimeRef.current >= 5000 && !errorMessage.includes('No QR code found')) {
+                        console.error('Clearance scanning error:', errorMessage);
+                        showToast('error', `Failed to detect code: ${errorMessage}. Please try again.`);
+                        lastToastTimeRef.current = now;
+                    }
+                },
+            );
+            setTimeout(() => {
+                if (isClearanceScanning) {
+                    stopClearanceScanning();
+                    showToast('info', 'Clearance scanning timed out. Please try again or use manual input.');
+                }
+            }, 15000);
+        } catch (error: any) {
+            console.error('Start clearance scanning error:', error.name, error.message);
+            let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
+                showPermissionInstructions();
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'No camera found. Please connect a camera or use manual input.';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage = 'Camera constraints not supported. Please select a different camera or use manual input.';
+            }
+            setClearanceCameraError(errorMessage);
+            showToast('error', errorMessage);
+            setIsClearanceScanning(false);
+        }
+    };
+
     const stopScanning = () => {
         if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
             scannerRef.current
@@ -224,13 +287,30 @@ export default function LibrarianDashboard() {
         setIsScanning(false);
     };
 
+    const stopClearanceScanning = () => {
+        if (clearanceScannerRef.current && clearanceScannerRef.current.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
+            clearanceScannerRef.current
+                .stop()
+                .then(() => {
+                    setIsClearanceScanning(false);
+                })
+                .catch((err) => {
+                    console.error('Stop clearance scanning error:', err);
+                });
+        }
+        setIsClearanceScanning(false);
+    };
+
     useEffect(() => {
         if (cameraError && inputRef.current && initialScanStep !== 'confirm') {
             inputRef.current.focus();
         } else if (inputRef.current && initialScanStep !== 'confirm') {
             inputRef.current.focus();
         }
-    }, [initialScanStep, cameraError]);
+        if (isClearanceModalOpen && clearanceInputRef.current) {
+            clearanceInputRef.current.focus();
+        }
+    }, [initialScanStep, cameraError, isClearanceModalOpen]);
 
     const showPermissionInstructions = () => {
         const userAgent = navigator.userAgent.toLowerCase();
@@ -247,8 +327,7 @@ export default function LibrarianDashboard() {
 
     const showToast = (type: ToastMessage['type'], message: string) => {
         const id = Date.now().toString();
-        const toast: ToastMessage = { type, message, id };
-        setToasts((prev) => [...prev, toast]);
+        setToasts((prev) => [...prev, { type, message, id }]);
         setTimeout(() => {
             setToasts((prev) => prev.filter((t) => t.id !== id));
         }, 5000);
@@ -261,8 +340,6 @@ export default function LibrarianDashboard() {
     const handleScanSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!data.scan_input.trim() || processing) return;
-
-        // Client-side ISBN validation
         if (data.scan_step === 'book') {
             if (data.scan_input.length !== 10 && data.scan_input.length !== 13) {
                 showToast('error', 'Invalid ISBN format. ISBN must be 10 or 13 digits.');
@@ -273,7 +350,6 @@ export default function LibrarianDashboard() {
                 return;
             }
         }
-
         console.log('Submitting scan:', data);
         post(route('librarian.scan'), {
             preserveState: true,
@@ -291,20 +367,38 @@ export default function LibrarianDashboard() {
         });
     };
 
+    const handleClearanceSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!clearanceData.member_id.trim() || clearanceProcessing) return;
+        console.log('Submitting clearance check:', clearanceData);
+        clearancePost(route('librarian.clearance'), {
+            preserveState: true,
+            onSuccess: (page) => {
+                const { clearance } = page.props as {
+                    clearance: { isCleared: boolean; message: string; details?: { activeLoans: number; unpaidFines: number } };
+                };
+                setClearanceStatus(clearance);
+                showToast(clearance.isCleared ? 'success' : 'error', clearance.message);
+            },
+            onError: (errors) => {
+                console.error('Clearance check errors:', errors);
+                showToast('error', errors.member_id?.[0] || 'Failed to check clearance.');
+                setClearanceScanInput('');
+                clearanceReset();
+            },
+        });
+    };
+
     const handleConfirmBorrow = () => {
         if (!initialStudent || !initialBook) {
-            // ... (your validation)
+            showToast('error', 'Missing student or book information');
             return;
         }
-
         const payload = {
             member_id: initialStudent.member_id,
             book_isbn: initialBook.isbn,
         };
-
         console.log('Confirm borrow payload:', payload);
-
-        // Use router.post to send the specific student and book data
         router.post(route('librarian.confirm-borrow'), payload, {
             preserveState: false,
             headers: {
@@ -314,6 +408,7 @@ export default function LibrarianDashboard() {
                 console.log('Borrow confirmation successful');
                 reset();
                 setScanInput('');
+                setClearanceStatus(null);
                 showToast('success', 'Borrowing confirmed successfully.');
             },
             onError: (errors) => {
@@ -325,8 +420,6 @@ export default function LibrarianDashboard() {
 
     const handleReset = () => {
         console.log('Resetting scan state');
-
-        // Use router.post for the reset action as well
         router.post(
             route('librarian.scan'),
             {
@@ -343,6 +436,7 @@ export default function LibrarianDashboard() {
                     console.log('Reset successful');
                     reset();
                     setScanInput('');
+                    setClearanceStatus(null);
                     showToast('success', 'Scan reset successfully.');
                 },
                 onError: (errors) => {
@@ -355,12 +449,9 @@ export default function LibrarianDashboard() {
 
     const handleClearAll = () => {
         console.log('Clearing all scan state');
-
-        // Use router.post to send a specific payload, bypassing the useForm state.
         router.post(
             route('librarian.scan'),
             {
-                // This is the data payload that will be sent
                 scan_input: '',
                 scan_step: 'student',
                 clear_all: true,
@@ -372,8 +463,9 @@ export default function LibrarianDashboard() {
                 },
                 onSuccess: () => {
                     console.log('Clear all successful');
-                    reset(); // You can still use reset from your useForm hook
+                    reset();
                     setScanInput('');
+                    setClearanceStatus(null);
                     showToast('success', 'All scan data cleared successfully.');
                 },
                 onError: (errors) => {
@@ -384,17 +476,44 @@ export default function LibrarianDashboard() {
         );
     };
 
+    const openClearanceModal = () => {
+        setIsClearanceModalOpen(true);
+        setClearanceStatus(null);
+        setClearanceScanInput('');
+        clearanceReset();
+        if (clearanceInputRef.current) {
+            clearanceInputRef.current.focus();
+        }
+    };
+
+    const closeClearanceModal = () => {
+        setIsClearanceModalOpen(false);
+        stopClearanceScanning();
+        setClearanceStatus(null);
+        setClearanceScanInput('');
+        clearanceReset();
+    };
+
+    const resetClearanceScan = () => {
+        setClearanceStatus(null);
+        setClearanceScanInput('');
+        clearanceReset();
+        stopClearanceScanning();
+        if (clearanceInputRef.current) {
+            clearanceInputRef.current.focus();
+        }
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Librarian Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 {/* Welcome & Quick Stats */}
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
                         <h1 className="mb-2 text-xl font-bold text-gray-900">Welcome, {auth.user.name}</h1>
                         <p className="text-gray-600">Manage book transactions and assist library users with their borrowing needs.</p>
                     </div>
-
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
@@ -404,7 +523,6 @@ export default function LibrarianDashboard() {
                             <TrendingUp className="h-8 w-8 text-blue-600" />
                         </div>
                     </div>
-
                     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
@@ -413,6 +531,17 @@ export default function LibrarianDashboard() {
                             </div>
                             <Clock className="h-8 w-8 text-red-600" />
                         </div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                        <button onClick={openClearanceModal} className="w-full text-left">
+                            <div className="flex items-center space-x-3">
+                                <CheckCircle className="h-8 w-8 text-green-600" />
+                                <div>
+                                    <h3 className="font-semibold text-gray-900">Check Clearance</h3>
+                                    <p className="text-sm text-gray-600">Check student clearance status</p>
+                                </div>
+                            </div>
+                        </button>
                     </div>
                 </div>
 
@@ -432,7 +561,6 @@ export default function LibrarianDashboard() {
                                               : 'Confirm Borrowing'}
                                     </h2>
                                 </div>
-
                                 {cameraDevices.length > 0 && initialScanStep !== 'confirm' && (
                                     <div className="mb-4">
                                         <label htmlFor="cameraSelect" className="block text-sm font-medium text-gray-700">
@@ -459,7 +587,6 @@ export default function LibrarianDashboard() {
                                         </select>
                                     </div>
                                 )}
-
                                 {initialScanStep !== 'confirm' && (
                                     <div className="relative mb-4">
                                         <div
@@ -483,7 +610,6 @@ export default function LibrarianDashboard() {
                                         )}
                                     </div>
                                 )}
-
                                 {initialScanStep !== 'confirm' && (
                                     <form onSubmit={handleScanSubmit} className="space-y-4">
                                         <div className="relative">
@@ -512,7 +638,6 @@ export default function LibrarianDashboard() {
                                                 </div>
                                             )}
                                         </div>
-
                                         <div className="flex space-x-3">
                                             <button
                                                 type="button"
@@ -550,8 +675,6 @@ export default function LibrarianDashboard() {
                                         </div>
                                     </form>
                                 )}
-
-                                {/* Borrowing Form */}
                                 {initialScanStep === 'confirm' && initialStudent && initialBook && (
                                     <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
                                         <h3 className="text-lg font-semibold text-gray-900">Confirm Borrowing</h3>
@@ -589,8 +712,6 @@ export default function LibrarianDashboard() {
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Step Indicator */}
                                 <div className="mt-6 flex items-center justify-center space-x-4">
                                     <div
                                         className={`flex items-center space-x-2 rounded-full px-3 py-1 text-sm ${
@@ -627,16 +748,13 @@ export default function LibrarianDashboard() {
                                 </div>
                             </div>
                         </div>
-
                         {/* Information Cards Section */}
                         <div className="space-y-6">
-                            {/* Student Information Card */}
                             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg">
                                 <div className="mb-4 flex items-center space-x-3">
                                     <User className="h-6 w-6 text-green-600" />
                                     <h3 className="text-lg font-semibold text-gray-900">Student Information</h3>
                                 </div>
-
                                 {initialStudent ? (
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
@@ -665,14 +783,11 @@ export default function LibrarianDashboard() {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Book Information Card */}
                             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-lg">
                                 <div className="mb-4 flex items-center space-x-3">
                                     <BookOpen className="h-6 w-6 text-blue-600" />
                                     <h3 className="text-lg font-semibold text-gray-900">Book Information</h3>
                                 </div>
-
                                 {initialBook ? (
                                     <div className="space-y-3">
                                         <div className="flex justify-between">
@@ -716,8 +831,6 @@ export default function LibrarianDashboard() {
                         </div>
                     </div>
                 </div>
-
-                {/* Quick Actions */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <a
                         href="/librarian/transactions"
@@ -731,7 +844,6 @@ export default function LibrarianDashboard() {
                             </div>
                         </div>
                     </a>
-
                     <a
                         href="/librarian/returns"
                         className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
@@ -744,7 +856,6 @@ export default function LibrarianDashboard() {
                             </div>
                         </div>
                     </a>
-
                     <a
                         href="/librarian/overdue"
                         className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
@@ -758,30 +869,178 @@ export default function LibrarianDashboard() {
                         </div>
                     </a>
                 </div>
-            </div>
-
-            {/* Toast Notifications */}
-            <div className="fixed right-4 bottom-4 z-50 space-y-2">
-                {toasts.map((toast) => (
-                    <div
-                        key={toast.id}
-                        className={`flex max-w-sm items-center space-x-3 rounded-lg border px-4 py-3 shadow-lg ${
-                            toast.type === 'success'
-                                ? 'border-green-200 bg-green-50 text-green-800'
-                                : toast.type === 'error'
-                                  ? 'border-red-200 bg-red-50 text-red-800'
-                                  : 'border-blue-200 bg-blue-50 text-blue-800'
-                        }`}
-                    >
-                        {toast.type === 'success' && <CheckCircle className="h-5 w-5 text-green-600" />}
-                        {toast.type === 'error' && <AlertCircle className="h-5 w-5 text-red-600" />}
-                        {toast.type === 'info' && <AlertCircle className="h-5 w-5 text-blue-600" />}
-                        <span className="text-sm font-medium">{toast.message}</span>
-                        <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-600">
-                            ×
-                        </button>
+                {/* Clearance Modal */}
+                {isClearanceModalOpen && (
+                    <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
+                        <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="flex items-center text-xl font-semibold text-gray-900">
+                                    <CheckCircle className="mr-2 h-6 w-6 text-green-600" />
+                                    Check Student Clearance
+                                </h2>
+                                <button
+                                    onClick={closeClearanceModal}
+                                    className="text-gray-400 hover:text-gray-600"
+                                    aria-label="Close clearance modal"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            <div className="space-y-4">
+                                {cameraDevices.length > 0 && (
+                                    <div className="mb-4">
+                                        <label htmlFor="clearanceCameraSelect" className="block text-sm font-medium text-gray-700">
+                                            Select Camera
+                                        </label>
+                                        <select
+                                            id="clearanceCameraSelect"
+                                            value={selectedCamera || ''}
+                                            onChange={(e) => setSelectedCamera(e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-4 py-2"
+                                        >
+                                            <option value="" disabled>
+                                                Select a camera
+                                            </option>
+                                            {cameraDevices.map((device) => (
+                                                <option key={device.id} value={device.id}>
+                                                    {device.label.toLowerCase().includes('back') ||
+                                                    device.label.toLowerCase().includes('rear') ||
+                                                    device.label.toLowerCase().includes('environment')
+                                                        ? 'Rear Camera'
+                                                        : 'Front Camera'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="relative mb-4">
+                                    <div
+                                        id="clearance-scanner-container"
+                                        ref={clearanceScannerContainerRef}
+                                        className={`w-full rounded-lg ${isClearanceScanning ? 'block' : 'hidden'}`}
+                                        style={{ maxHeight: isMobile ? '40vh' : '250px' }}
+                                    />
+                                    {!isClearanceScanning && (
+                                        <div
+                                            className={`flex h-[${isMobile ? '40vh' : '250px'}] w-full items-center justify-center rounded-lg bg-gray-100`}
+                                        >
+                                            {clearanceCameraError ? (
+                                                <p className="px-4 text-center text-red-600" id="clearance-camera-error">
+                                                    {clearanceCameraError}
+                                                </p>
+                                            ) : (
+                                                <p className="text-gray-500">Camera feed will appear here when scanning</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <form onSubmit={handleClearanceSubmit} className="space-y-4">
+                                    <div className="relative">
+                                        <input
+                                            ref={clearanceInputRef}
+                                            type="text"
+                                            value={clearanceScanInput}
+                                            onChange={(e) => {
+                                                setClearanceScanInput(e.target.value);
+                                                setClearanceData('member_id', e.target.value);
+                                            }}
+                                            placeholder={clearanceCameraError ? 'Enter student ID manually...' : 'Scan or enter student ID...'}
+                                            className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            disabled={clearanceProcessing}
+                                            aria-describedby={clearanceCameraError ? 'clearance-camera-error' : undefined}
+                                        />
+                                        {clearanceProcessing && (
+                                            <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
+                                                <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex space-x-3">
+                                        <button
+                                            type="button"
+                                            onClick={isClearanceScanning ? stopClearanceScanning : startClearanceScanning}
+                                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                            disabled={clearanceProcessing || !selectedCamera}
+                                            aria-label={isClearanceScanning ? 'Stop scanning' : 'Start scanning'}
+                                        >
+                                            {isClearanceScanning ? 'Stop Scanning' : 'Start Scanning'}
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={!clearanceData.member_id.trim() || clearanceProcessing}
+                                            className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                            aria-label="Submit clearance check"
+                                        >
+                                            {clearanceProcessing ? 'Checking...' : 'Check Clearance'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={resetClearanceScan}
+                                            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                                            aria-label="Reset clearance scan"
+                                        >
+                                            <RefreshCw className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </form>
+                                {clearanceStatus && (
+                                    <div className="mt-4 rounded-lg border p-4">
+                                        <div className="flex items-center space-x-2">
+                                            {clearanceStatus.isCleared ? (
+                                                <>
+                                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                                    <span className="text-sm font-medium text-green-800">{clearanceStatus.message}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <AlertCircle className="h-5 w-5 text-red-600" />
+                                                    <span className="text-sm font-medium text-red-800">{clearanceStatus.message}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        {!clearanceStatus.isCleared && clearanceStatus.details && (
+                                            <div className="mt-2 text-sm text-gray-600">
+                                                <p>Active Loans: {clearanceStatus.details.activeLoans}</p>
+                                                <p>Unpaid Fines: ${clearanceStatus.details.unpaidFines.toFixed(2)}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <div className="mt-4 flex justify-end space-x-3">
+                                    <button
+                                        onClick={closeClearanceModal}
+                                        className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+                                        aria-label="Close clearance modal"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                ))}
+                )}
+                <div className="fixed right-4 bottom-4 z-50 space-y-2">
+                    {toasts.map((toast) => (
+                        <div
+                            key={toast.id}
+                            className={`flex max-w-sm items-center space-x-3 rounded-lg border px-4 py-3 shadow-lg ${
+                                toast.type === 'success'
+                                    ? 'border-green-200 bg-green-50 text-green-800'
+                                    : toast.type === 'error'
+                                      ? 'border-red-200 bg-red-50 text-red-800'
+                                      : 'border-blue-200 bg-blue-50 text-blue-800'
+                            }`}
+                        >
+                            {toast.type === 'success' && <CheckCircle className="h-5 w-5 text-green-600" />}
+                            {toast.type === 'error' && <AlertCircle className="h-5 w-5 text-red-600" />}
+                            {toast.type === 'info' && <AlertCircle className="h-5 w-5 text-blue-600" />}
+                            <span className="text-sm font-medium">{toast.message}</span>
+                            <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-600">
+                                ×
+                            </button>
+                        </div>
+                    ))}
+                </div>
             </div>
         </AppLayout>
     );

@@ -51,6 +51,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Transactions
         Route::get('/librarian/transactions', [TransactionController::class, 'index'])->name('librarian.transactions');
+        Route::post('/librarian/clearance', [DashboardController::class, 'checkClearance'])
+            ->name('librarian.clearance');
     });
 
     Route::middleware(['role:admin'])->prefix('admin')->group(function () {
