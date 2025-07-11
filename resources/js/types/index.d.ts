@@ -83,7 +83,7 @@ export interface Transaction {
     user_id?: number;
     book_id?: number;
     member_id?: string;
-    member_name?: string;
+    student_name?: string;
     book_title: string;
     book_isbn?: string;
     borrowed_at: string;

@@ -48,6 +48,8 @@ export default function AdminTransactions() {
         totalFines: 0,
     });
 
+    console.log(transactions)
+
     useEffect(() => {
         if (!initialTransactions.data.length) {
             setIsLoading(true);
@@ -104,7 +106,7 @@ export default function AdminTransactions() {
         if (searchTerm) {
             filtered = filtered.filter(
                 (transaction) =>
-                    (transaction.member_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (transaction.student_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (transaction.book_title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (transaction.member_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (transaction.book_isbn || '').toLowerCase().includes(searchTerm.toLowerCase()),
@@ -227,7 +229,7 @@ export default function AdminTransactions() {
             ...filteredTransactions.map((t) => [
                 t.id.toString(),
                 t.member_id || 'N/A',
-                t.member_name || 'Unknown User',
+                t.student_name || 'Unknown User',
                 t.book_isbn || 'N/A',
                 t.book_title || 'Unknown Book',
                 formatDate(t.borrowed_at),
@@ -408,7 +410,7 @@ export default function AdminTransactions() {
                                                     <div className="flex items-center">
                                                         <span className="font-medium">Student:</span>
                                                         <span className="ml-2">
-                                                            {transaction.member_name || 'Unknown User'} (
+                                                            {transaction.student_name || 'Unknown User'} (
                                                             {transaction.member_id || 'N/A'})
                                                         </span>
                                                     </div>
