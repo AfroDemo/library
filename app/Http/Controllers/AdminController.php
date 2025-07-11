@@ -6,6 +6,7 @@ use App\Models\Book;
 use App\Models\User;
 use App\Models\Student;
 use App\Models\Transaction;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -13,7 +14,6 @@ use Inertia\Inertia;
 
 class AdminController extends Controller
 {
-    // Books Management
     public function booksIndex(Request $request)
     {
         $query = Book::query();
@@ -88,7 +88,6 @@ class AdminController extends Controller
         return redirect()->route('admin.books.index')->with('success', 'Book deleted successfully');
     }
 
-    // Users Management
     public function usersIndex(Request $request)
     {
         $query = User::query();
@@ -195,7 +194,6 @@ class AdminController extends Controller
         return redirect()->route('admin.users.index')->with('success', 'User deleted successfully');
     }
 
-    // Librarians Management
     public function librariansIndex(Request $request)
     {
         $query = User::where('role', 'librarian');
@@ -278,14 +276,13 @@ class AdminController extends Controller
         return redirect()->route('admin.librarians.index')->with('success', 'Librarian deleted successfully');
     }
 
-    // Settings Management
     public function settingsIndex()
     {
         $settings = Cache::remember('library_settings', 300, function () {
             return [
-                'loan_duration_days' => config('library.loan_duration_days', 14),
-                'max_books_per_user' => config('library.max_books_per_user', 5),
-                'overdue_fine_per_day' => config('library.overdue_fine_per_day', 1.00),
+                'loan_duration_days' => Setting::where('key', 'loan_duration_days')->first()->value ?? 14,
+                'max_books_per_user' => Setting::where('key', 'max_books_per_user')->first()->value ?? 5,
+                'overdue_fine_per_day' => Setting::where('key', 'overdue_fine_per_day')->first()->value ?? 1.00,
             ];
         });
 
@@ -304,18 +301,20 @@ class AdminController extends Controller
             'overdue_fine_per_day' => 'required|numeric|min:0',
         ]);
 
-        // Update config values (in a real app, store in DB or .env)
-        config([
-            'library.loan_duration_days' => $validated['loan_duration_days'],
-            'library.max_books_per_user' => $validated['max_books_per_user'],
-            'library.overdue_fine_per_day' => $validated['overdue_fine_per_day'],
-        ]);
+        Setting::updateOrCreate(
+            ['key' => 'loan_duration_days'],
+            ['value' => $validated['loan_duration_days']]
+        );
+        Setting::updateOrCreate(
+            ['key' => 'max_books_per_user'],
+            ['value' => $validated['max_books_per_user']]
+        );
+        Setting::updateOrCreate(
+            ['key' => 'overdue_fine_per_day'],
+            ['value' => $validated['overdue_fine_per_day']]
+        );
 
-        // Clear cache to reflect updated settings
         Cache::forget('library_settings');
-
-        // Optionally, persist to .env or database
-        // For simplicity, we'll assume config is sufficient for this example
 
         return redirect()->route('admin.settings.index')->with('success', 'Settings updated successfully');
     }

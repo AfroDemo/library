@@ -1,9 +1,11 @@
 'use client';
-import { Head, usePage } from '@inertiajs/react';
-import { AlertTriangle, BookOpen, Calendar, CheckCircle, Clock, Search, User } from 'lucide-react';
-import { useState } from 'react';
+
+import { Head, router, usePage } from '@inertiajs/react';
+import axios from 'axios';
+import { AlertTriangle, BookOpen, Calendar, CheckCircle, Clock, DollarSign, Search, Timer, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { BreadcrumbItem, DashboardStats, PageProps, Transaction } from '../../types';
+import type { BreadcrumbItem, DashboardStats, PageProps, ToastMessage, Transaction } from '../../types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'My Library', href: '/user' },
@@ -15,18 +17,118 @@ export default function UserDashboard() {
         auth,
         stats: initialStats = {},
         transactions: initialTransactions = [],
-    } = usePage<PageProps & { stats?: DashboardStats; transactions?: Transaction[] }>().props;
-    const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+        errors,
+        success,
+    } = usePage<PageProps & { stats?: DashboardStats; transactions?: Transaction[]; errors?: any; success?: string | null }>().props;
     const [stats, setStats] = useState<DashboardStats>(initialStats);
-    const [isLoading, setIsLoading] = useState(false);
+    const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+    const [isLoading, setIsLoading] = useState(!initialStats.myBorrowedBooks);
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [isExtensionModalOpen, setIsExtensionModalOpen] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+    const [requestedDays, setRequestedDays] = useState<number>(7);
+
+    useEffect(() => {
+        if (!initialStats.myBorrowedBooks) {
+            setIsLoading(true);
+            axios
+                .get('/api/user/stats')
+                .then((response) => {
+                    setStats(response.data);
+                    setIsLoading(false);
+                })
+                .catch((error) => {
+                    console.error('Failed to fetch stats:', error);
+                    showToast('error', 'Failed to load dashboard statistics');
+                    setIsLoading(false);
+                });
+        }
+
+        if (success) {
+            showToast('success', success);
+        }
+        if (errors && Object.values(errors).length > 0) {
+            Object.values(errors).forEach((error: any) => showToast('error', error));
+        }
+    }, [success, errors]);
+
+    const showToast = (type: ToastMessage['type'], message: string) => {
+        const id = Date.now().toString();
+        const toast: ToastMessage = { type, message, id };
+        setToasts((prev) => [...prev, toast]);
+        setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== id));
+        }, 5000);
+    };
+
+    const removeToast = (id: string) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+    };
+
+    const openExtensionModal = (transaction: Transaction) => {
+        if (!transaction.returned_at && !transaction.extension_status) {
+            setSelectedTransaction(transaction);
+            setRequestedDays(7);
+            setIsExtensionModalOpen(true);
+        }
+    };
+
+    const handleExtensionRequest = () => {
+        if (selectedTransaction) {
+            router.post(
+                '/transactions/extension',
+                {
+                    transaction_id: selectedTransaction.id,
+                    requested_days: requestedDays,
+                },
+                {
+                    onSuccess: () => {
+                        setIsExtensionModalOpen(false);
+                        showToast('success', 'Extension request submitted successfully');
+                        router.reload({ only: ['transactions', 'stats'] });
+                    },
+                    onError: (errors) => {
+                        Object.values(errors).forEach((error: any) => showToast('error', error));
+                    },
+                },
+            );
+        }
+    };
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString();
     };
 
-    const isOverdue = (dueDate: string) => {
-        return new Date(dueDate) < new Date() && !transactions.find((t) => t.due_date === dueDate)?.returned_at;
+    const isOverdue = (transaction: Transaction) => {
+        return !transaction.returned_at && new Date(transaction.due_date) < new Date();
     };
+
+    const statCards = [
+        {
+            title: 'Books Borrowed',
+            value: stats.myBorrowedBooks ?? 0,
+            icon: BookOpen,
+            color: 'text-blue-600',
+        },
+        {
+            title: 'Active Borrowed Books',
+            value: stats.activeLoans ?? 0,
+            icon: Calendar,
+            color: 'text-green-600',
+        },
+        {
+            title: 'Overdue Books',
+            value: stats.overdueBooks ?? 0,
+            icon: Clock,
+            color: 'text-red-600',
+        },
+        {
+            title: 'Fines Owed',
+            value: transactions.reduce((sum, t) => sum + (t.fine_amount && !t.fine_paid ? t.fine_amount : 0), 0).toFixed(2),
+            icon: DollarSign,
+            color: 'text-yellow-600',
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -47,42 +149,21 @@ export default function UserDashboard() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Books Borrowed</p>
-                                <p className="text-3xl font-bold text-gray-900">{stats.myBorrowedBooks ?? 0}</p>
+                    {statCards.map((card, index) => (
+                        <div
+                            key={index}
+                            className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+                            aria-label={`${card.title}: ${isLoading ? 'Loading' : card.value}`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                                    <p className="text-3xl font-bold text-gray-900">{isLoading ? '...' : card.value.toLocaleString()}</p>
+                                </div>
+                                <card.icon className={`h-8 w-8 ${card.color}`} />
                             </div>
-                            <BookOpen className="h-8 w-8 text-blue-600" />
                         </div>
-                    </div>
-                    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Active Borrowed Books</p>
-                                <p className="text-3xl font-bold text-green-600">{stats.activeLoans ?? 0}</p>
-                            </div>
-                            <Calendar className="h-8 w-8 text-green-600" />
-                        </div>
-                    </div>
-                    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Overdue Books</p>
-                                <p className="text-3xl font-bold text-red-600">{stats.overdueBooks ?? 0}</p>
-                            </div>
-                            <Clock className="h-8 w-8 text-red-600" />
-                        </div>
-                    </div>
-                    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-gray-600">Returned Books</p>
-                                <p className="text-3xl font-bold text-gray-900">{stats.returnedBooks ?? 0}</p>
-                            </div>
-                            <CheckCircle className="h-8 w-8 text-gray-600" />
-                        </div>
-                    </div>
+                    ))}
                 </div>
 
                 {/* Current Borrowed Books */}
@@ -107,7 +188,7 @@ export default function UserDashboard() {
                                         <div
                                             key={transaction.id}
                                             className={`rounded-lg border p-4 ${
-                                                isOverdue(transaction.due_date) ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'
+                                                isOverdue(transaction) ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'
                                             }`}
                                         >
                                             <div className="flex items-start justify-between">
@@ -122,10 +203,30 @@ export default function UserDashboard() {
                                                             <Clock className="mr-2 h-4 w-4" />
                                                             <span>Due: {formatDate(transaction.due_date)}</span>
                                                         </div>
+                                                        {transaction.fine_amount && (
+                                                            <div className="flex items-center">
+                                                                <DollarSign className="mr-2 h-4 w-4" />
+                                                                <span>
+                                                                    Fine: ${transaction.fine_amount.toFixed(2)}{' '}
+                                                                    {transaction.fine_paid ? '(Paid)' : '(Unpaid)'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {transaction.extension_status && (
+                                                            <div className="flex items-center">
+                                                                <Timer className="mr-2 h-4 w-4" />
+                                                                <span>
+                                                                    Extension:{' '}
+                                                                    {transaction.extension_status.charAt(0).toUpperCase() +
+                                                                        transaction.extension_status.slice(1)}
+                                                                    {transaction.requested_days && ` (${transaction.requested_days} days)`}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <div className="ml-4">
-                                                    {isOverdue(transaction.due_date) ? (
+                                                <div className="ml-4 space-y-2">
+                                                    {isOverdue(transaction) ? (
                                                         <div className="flex items-center text-red-600">
                                                             <AlertTriangle className="mr-1 h-4 w-4" />
                                                             <span className="text-sm font-medium">Overdue</span>
@@ -135,6 +236,16 @@ export default function UserDashboard() {
                                                             <CheckCircle className="mr-1 h-4 w-4" />
                                                             <span className="text-sm font-medium">Active</span>
                                                         </div>
+                                                    )}
+                                                    {!transaction.returned_at && !transaction.extension_status && (
+                                                        <button
+                                                            onClick={() => openExtensionModal(transaction)}
+                                                            className="flex items-center text-blue-600 hover:text-blue-900"
+                                                            aria-label={`Request extension for ${transaction.book_title}`}
+                                                        >
+                                                            <Timer className="mr-1 h-4 w-4" />
+                                                            <span className="text-sm">Request Extension</span>
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>
@@ -151,6 +262,55 @@ export default function UserDashboard() {
                     </div>
                 </div>
 
+                {/* Extension Request Modal */}
+                {isExtensionModalOpen && selectedTransaction && (
+                    <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
+                        <div className="w-full max-w-md rounded-lg bg-white p-6">
+                            <h2 className="mb-4 text-xl font-bold text-gray-900">Request Extension</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Book</label>
+                                    <p className="text-sm text-gray-900">
+                                        {selectedTransaction.book_title} ({selectedTransaction.book_isbn})
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Current Due Date</label>
+                                    <p className="text-sm text-gray-900">{formatDate(selectedTransaction.due_date)}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Requested Extension (days)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="14"
+                                        value={requestedDays}
+                                        onChange={(e) => setRequestedDays(Number(e.target.value))}
+                                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                                        aria-label="Requested extension days"
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-6 flex justify-end space-x-3">
+                                <button
+                                    onClick={() => setIsExtensionModalOpen(false)}
+                                    className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50"
+                                    aria-label="Cancel"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleExtensionRequest}
+                                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                                    aria-label="Submit extension request"
+                                >
+                                    Submit Request
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <a href="/user/search" className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -162,7 +322,6 @@ export default function UserDashboard() {
                             </div>
                         </div>
                     </a>
-
                     <a href="/user/history" className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
                         <div className="flex items-center space-x-3">
                             <Clock className="h-8 w-8 text-gray-600" />
@@ -172,6 +331,29 @@ export default function UserDashboard() {
                             </div>
                         </div>
                     </a>
+                </div>
+
+                {/* Toast Notifications */}
+                <div className="fixed right-4 bottom-4 z-50 space-y-2">
+                    {toasts.map((toast) => (
+                        <div
+                            key={toast.id}
+                            className={`flex max-w-sm items-center space-x-3 rounded-lg border px-4 py-3 shadow-lg ${
+                                toast.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'
+                            }`}
+                        >
+                            {toast.type === 'success' && <div className="h-5 w-5 text-green-600">✔</div>}
+                            {toast.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600" />}
+                            <span className="text-sm font-medium">{toast.message}</span>
+                            <button
+                                onClick={() => removeToast(toast.id)}
+                                className="text-gray-400 hover:text-gray-600"
+                                aria-label="Close toast notification"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    ))}
                 </div>
             </div>
         </AppLayout>

@@ -21,6 +21,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/students/{member_id}', [TransactionController::class, 'getStudent']);
     Route::get('/books/{isbn}', [TransactionController::class, 'getBook']);
     Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
+    Route::post('/transactions/extension', [TransactionController::class, 'requestExtension']);
 
     Route::middleware(['role:librarian,admin'])->group(function () {
         Route::post('/dashboard/scan', [DashboardController::class, 'handleScan'])->name('librarian.scan');

@@ -5,14 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Book;
 use App\Models\Student;
 use App\Models\Transaction;
+use App\Models\Fine;
+use App\Models\ExtensionRequest;
+use App\Models\Setting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class TransactionController extends Controller
 {
-    // Get student by member_id (used by /api/students/{id})
     public function getStudent(Request $request, $id)
     {
         $student = Student::where('member_id', $id)->with('user')->first();
@@ -20,13 +23,12 @@ class TransactionController extends Controller
             return response()->json(['error' => 'Student not found'], 404);
         }
         return response()->json([
-            'member_id' => $student->member_id, // Map member_id to member_id for frontend
+            'member_id' => $student->member_id,
             'name' => $student->user->name,
             'email' => $student->user->email,
         ]);
     }
 
-    // Get book by ISBN (used by /api/books/{isbn})
     public function getBook(Request $request, $isbn)
     {
         $book = Book::where('isbn', $isbn)->first();
@@ -44,11 +46,10 @@ class TransactionController extends Controller
     public function userTransactions(Request $request)
     {
         $user = $request->user();
-        $query = Transaction::with(['book'])
+        $query = Transaction::with(['book', 'fines', 'extensionRequests'])
             ->where('user_id', $user->id)
             ->orderBy('borrowed_at', 'desc');
 
-        // Server-side search
         if ($request->has('search') && $request->search) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -59,7 +60,6 @@ class TransactionController extends Controller
             });
         }
 
-        // Status filter
         if ($request->has('status')) {
             if ($request->status === 'active') {
                 $query->whereNull('returned_at');
@@ -71,7 +71,6 @@ class TransactionController extends Controller
             }
         }
 
-        // Log the query for debugging
         Log::info('User transactions queried', [
             'user_id' => $user->id,
             'search' => $request->search,
@@ -79,6 +78,8 @@ class TransactionController extends Controller
         ]);
 
         $transactions = $query->paginate(20)->through(function ($t) {
+            $fine = $t->fines()->latest()->first();
+            $extensionRequest = $t->extensionRequests()->latest()->first();
             return [
                 'id' => $t->id,
                 'borrowed_at' => $t->borrowed_at->toDateTimeString(),
@@ -86,19 +87,28 @@ class TransactionController extends Controller
                 'returned_at' => $t->returned_at?->toDateTimeString(),
                 'book_title' => $t->book ? $t->book->title : 'Unknown Book',
                 'book_isbn' => $t->book ? $t->book->isbn : 'N/A',
+                'fine_amount' => $fine ? $fine->amount : $t->calculateFine(),
+                'fine_paid' => $fine ? $fine->paid : false,
+                'extension_status' => $extensionRequest ? $extensionRequest->status : null,
+                'requested_days' => $extensionRequest ? $extensionRequest->requested_days : null,
+                'extension_id' => $extensionRequest ? $extensionRequest->id : null,
             ];
         });
 
         return Inertia::render('user/history', [
-            'transactions' => $transactions,
+            'transactions' => [
+                'data' => $transactions->items(),
+                'current_page' => $transactions->currentPage(),
+                'last_page' => $transactions->lastPage(),
+                'total' => $transactions->total(),
+                'per_page' => $transactions->perPage(),
+            ],
             'filters' => $request->only(['search', 'status']),
         ]);
     }
 
-    // Store a new transaction (used by /api/transactions)
     public function store(Request $request)
     {
-
         Log::debug($request);
         $request->validate([
             'member_id' => 'required|string',
@@ -140,17 +150,16 @@ class TransactionController extends Controller
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Book is not available']);
         }
 
-        // Create transaction
+        $loanDuration = Setting::where('key', 'loan_duration_days')->first()->value ?? 14;
         Transaction::create([
-            'user_id' => $studentModel->id,
+            'user_id' => $studentModel->user_id,
             'book_id' => $bookModel->id,
             'borrowed_at' => now(),
-            'due_date' => now()->addDays(14),
+            'due_date' => now()->addDays($loanDuration),
         ]);
 
         $bookModel->update(['available' => false]);
 
-        // Clear session data after successful transaction
         session()->forget(['student', 'scan_step', 'book']);
 
         Log::info('Transaction created, resetting scan_step to student');
@@ -160,7 +169,6 @@ class TransactionController extends Controller
         ]);
     }
 
-    // Return a book
     public function returnBook(Request $request, Transaction $transaction)
     {
         if ($transaction->returned_at) {
@@ -173,16 +181,27 @@ class TransactionController extends Controller
 
         $transaction->book->update(['available' => true]);
 
+        $fine = $transaction->calculateFine();
+        if ($fine > 0) {
+            Fine::create([
+                'transaction_id' => $transaction->id,
+                'user_id' => $transaction->user_id,
+                'amount' => $fine,
+                'paid' => false,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Book returned successfully',
-            'transaction' => $transaction->load(['user', 'book']),
+            'transaction' => $transaction->load(['user', 'book', 'fines']),
         ]);
     }
 
-    // List transactions for Inertia rendering
     public function index(Request $request)
     {
-        $query = Transaction::with(['user.student', 'book'])->orderBy('borrowed_at', 'desc');
+        $user = Auth::user();
+        $query = Transaction::with(['user.student', 'book', 'fines', 'extensionRequests'])
+            ->orderBy('borrowed_at', 'desc');
 
         if ($request->has('status')) {
             if ($request->status === 'active') {
@@ -195,31 +214,70 @@ class TransactionController extends Controller
             }
         }
 
-        $transactions = $query->paginate(20);
+        $transactions = $query->paginate(20)->through(function ($t) {
+            $fine = $t->fines()->latest()->first();
+            $extensionRequest = $t->extensionRequests()->latest()->first();
+            return [
+                'id' => $t->id,
+                'borrowed_at' => $t->borrowed_at->toDateTimeString(),
+                'due_date' => $t->due_date->toDateTimeString(),
+                'returned_at' => $t->returned_at?->toDateTimeString(),
+                'student_name' => $t->user ? $t->user->name : 'Unknown User',
+                'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : 'N/A',
+                'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                'book_isbn' => $t->book ? $t->book->isbn : 'N/A',
+                'fine_amount' => $fine ? $fine->amount : $t->calculateFine(),
+                'fine_paid' => $fine ? $fine->paid : false,
+                'extension_status' => $extensionRequest ? $extensionRequest->status : null,
+                'requested_days' => $extensionRequest ? $extensionRequest->requested_days : null,
+                'extension_id' => $extensionRequest ? $extensionRequest->id : null,
+            ];
+        });
 
-        return Inertia::render('librarian/transactions', [
-            'transactions' => $transactions,
-            'filters' => $request->only(['status']),
-        ]);
+        $transactionData = [
+            'data' => $transactions->items(),
+            'current_page' => $transactions->currentPage(),
+            'last_page' => $transactions->lastPage(),
+            'total' => $transactions->total(),
+            'per_page' => $transactions->perPage(),
+        ];
+
+        if ($user->role === 'librarian') {
+            return Inertia::render('librarian/transactions', [
+                'transactions' => $transactionData,
+                'filters' => $request->only(['status']),
+            ]);
+        } elseif ($user->role === 'admin') {
+            return Inertia::render('admin/transactions', [
+                'transactions' => $transactionData,
+                'filters' => $request->only(['status']),
+            ]);
+        }
     }
 
-    // Returns page: show all active (not returned) transactions for returns UI
     public function returnsPage(Request $request)
     {
-        $activeTransactions = Transaction::with(['user', 'book'])
+        $activeTransactions = Transaction::with(['user.student', 'book', 'fines', 'extensionRequests'])
             ->whereNull('returned_at')
             ->orderBy('borrowed_at', 'desc')
             ->get()
             ->map(function ($t) {
+                $fine = $t->fines()->latest()->first();
+                $extensionRequest = $t->extensionRequests()->latest()->first();
                 return [
                     'id' => $t->id,
-                    'borrowed_at' => $t->borrowed_at,
-                    'due_date' => $t->due_date,
-                    'returned_at' => $t->returned_at,
-                    'student_name' => $t->user ? $t->user->name : '',
-                    'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : '',
-                    'book_title' => $t->book ? $t->book->title : '',
-                    'book_isbn' => $t->book ? $t->book->isbn : '',
+                    'borrowed_at' => $t->borrowed_at->toDateTimeString(),
+                    'due_date' => $t->due_date->toDateTimeString(),
+                    'returned_at' => $t->returned_at?->toDateTimeString(),
+                    'student_name' => $t->user ? $t->user->name : 'Unknown User',
+                    'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : 'N/A',
+                    'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                    'book_isbn' => $t->book ? $t->book->isbn : 'N/A',
+                    'fine_amount' => $fine ? $fine->amount : $t->calculateFine(),
+                    'fine_paid' => $fine ? $fine->paid : false,
+                    'extension_status' => $extensionRequest ? $extensionRequest->status : null,
+                    'requested_days' => $extensionRequest ? $extensionRequest->requested_days : null,
+                    'extension_id' => $extensionRequest ? $extensionRequest->id : null,
                 ];
             });
         return Inertia::render('librarian/returns', [
@@ -227,7 +285,6 @@ class TransactionController extends Controller
         ]);
     }
 
-    // Process a return (POST)
     public function processReturn(Request $request)
     {
         $request->validate([
@@ -243,28 +300,44 @@ class TransactionController extends Controller
         if ($transaction->book) {
             $transaction->book->update(['available' => true]);
         }
+        $fine = $transaction->calculateFine();
+        if ($fine > 0) {
+            Fine::create([
+                'transaction_id' => $transaction->id,
+                'user_id' => $transaction->user_id,
+                'amount' => $fine,
+                'paid' => false,
+            ]);
+        }
         return redirect()->route('librarian.returns')->with('success', 'Book returned successfully!');
     }
-    // Overdue page: show all overdue transactions for overdue UI
+
     public function overduePage(Request $request)
     {
-        $overdueTransactions = Transaction::with(['user', 'book'])
+        $overdueTransactions = Transaction::with(['user.student', 'book', 'fines', 'extensionRequests'])
             ->whereNull('returned_at')
             ->where('due_date', '<', Carbon::today())
             ->orderBy('due_date', 'asc')
             ->get()
             ->map(function ($t) {
+                $fine = $t->fines()->latest()->first();
+                $extensionRequest = $t->extensionRequests()->latest()->first();
                 return [
                     'id' => $t->id,
-                    'borrowed_at' => $t->borrowed_at,
-                    'due_date' => $t->due_date,
-                    'returned_at' => $t->returned_at,
-                    'student_name' => $t->user ? $t->user->name : '',
-                    'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : '',
-                    'student_email' => $t->user ? $t->user->email : '',
-                    'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? null) : null,
-                    'book_title' => $t->book ? $t->book->title : '',
-                    'book_isbn' => $t->book ? $t->book->isbn : '',
+                    'borrowed_at' => $t->borrowed_at->toDateTimeString(),
+                    'due_date' => $t->due_date->toDateTimeString(),
+                    'returned_at' => $t->returned_at?->toDateTimeString(),
+                    'student_name' => $t->user ? $t->user->name : 'Unknown User',
+                    'member_id' => $t->user && $t->user->student ? $t->user->student->member_id : 'N/A',
+                    'student_email' => $t->user ? $t->user->email : 'N/A',
+                    'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? 'N/A') : 'N/A',
+                    'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                    'book_isbn' => $t->book ? $t->book->isbn : 'N/A',
+                    'fine_amount' => $fine ? $fine->amount : $t->calculateFine(),
+                    'fine_paid' => $fine ? $fine->paid : false,
+                    'extension_status' => $extensionRequest ? $extensionRequest->status : null,
+                    'requested_days' => $extensionRequest ? $extensionRequest->requested_days : null,
+                    'extension_id' => $extensionRequest ? $extensionRequest->id : null,
                 ];
             });
         return Inertia::render('librarian/overdue', [
@@ -272,23 +345,84 @@ class TransactionController extends Controller
         ]);
     }
 
-    // Send reminders for overdue books (POST)
     public function sendOverdueReminders(Request $request)
     {
         $request->validate([
             'transaction_ids' => 'required|array',
             'transaction_ids.*' => 'integer|exists:transactions,id',
         ]);
-        // Here you would send emails/SMS. For now, just log.
-        $transactions = Transaction::with(['user', 'book'])->whereIn('id', $request->transaction_ids)->get();
+        $transactions = Transaction::with(['user', 'book', 'fines'])->whereIn('id', $request->transaction_ids)->get();
         foreach ($transactions as $t) {
+            $fine = $t->fines()->latest()->first();
+            $amount = $fine ? $fine->amount : $t->calculateFine();
+            if ($amount > 0 && !$fine) {
+                Fine::create([
+                    'transaction_id' => $t->id,
+                    'user_id' => $t->user_id,
+                    'amount' => $amount,
+                    'paid' => false,
+                ]);
+            }
             Log::info('Reminder sent for overdue transaction', [
                 'transaction_id' => $t->id,
-                'student_email' => $t->user ? $t->user->email : null,
-                'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? null) : null,
-                'book_title' => $t->book ? $t->book->title : null,
+                'student_email' => $t->user ? $t->user->email : 'N/A',
+                'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? 'N/A') : 'N/A',
+                'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                'fine_amount' => $amount,
             ]);
         }
         return redirect()->route('librarian.overdue')->with('success', 'Reminders sent!');
+    }
+
+    public function requestExtension(Request $request)
+    {
+        $request->validate([
+            'transaction_id' => 'required|integer|exists:transactions,id',
+            'requested_days' => 'required|integer|min:1|max:14',
+        ]);
+
+        $transaction = Transaction::findOrFail($request->transaction_id);
+        if ($transaction->returned_at) {
+            return response()->json(['error' => 'Cannot request extension for returned book'], 400);
+        }
+
+        if ($transaction->extensionRequests()->where('status', 'pending')->exists()) {
+            return response()->json(['error' => 'An extension request is already pending'], 400);
+        }
+
+        ExtensionRequest::create([
+            'transaction_id' => $transaction->id,
+            'user_id' => $request->user()->id,
+            'requested_days' => $request->requested_days,
+            'status' => 'pending',
+        ]);
+
+        return response()->json(['message' => 'Extension request submitted successfully']);
+    }
+
+    public function processExtensionRequest(Request $request, ExtensionRequest $extensionRequest)
+    {
+        $request->validate([
+            'status' => 'required|in:approved,rejected',
+        ]);
+
+        if ($extensionRequest->status !== 'pending') {
+            return redirect()->back()->withErrors(['extension_request' => 'Request already processed']);
+        }
+
+        $extensionRequest->update([
+            'status' => $request->status,
+            'processed_at' => Carbon::now(),
+            'processed_by' => $request->user()->id,
+        ]);
+
+        if ($request->status === 'approved') {
+            $transaction = $extensionRequest->transaction;
+            $transaction->update([
+                'due_date' => $transaction->due_date->addDays($extensionRequest->requested_days),
+            ]);
+        }
+
+        return redirect()->route('librarian.overdue')->with('success', 'Extension request processed successfully');
     }
 }

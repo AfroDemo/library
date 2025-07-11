@@ -21,11 +21,6 @@ function getMainNavItems(role: string): NavItem[] {
     if (role === 'librarian' || role === 'admin') {
         items.push(
             {
-                title: 'Transactions',
-                href: '/librarian/transactions',
-                icon: Folder,
-            },
-            {
                 title: 'Returns',
                 href: '/librarian/returns',
                 icon: BookOpen,
@@ -35,7 +30,15 @@ function getMainNavItems(role: string): NavItem[] {
                 href: '/librarian/overdue',
                 icon: AlertTriangle,
             },
+            {
+                title: 'Transactions',
+                href: '/librarian/transactions',
+                icon: Folder,
+            },
         );
+    }
+    if (role === 'librarian') {
+        items.push();
     }
     if (role === 'admin') {
         items.push(

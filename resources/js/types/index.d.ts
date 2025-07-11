@@ -40,7 +40,7 @@ export interface User {
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
-    [key: string]: unknown; // This allows for additional properties...
+    [key: string]: unknown;
 }
 
 export interface Student {
@@ -59,6 +59,25 @@ export interface Book {
     available: boolean;
 }
 
+export interface Fine {
+    id: number;
+    transaction_id: number;
+    user_id: number;
+    amount: number;
+    paid: boolean;
+    paid_at?: string;
+}
+
+export interface ExtensionRequest {
+    id: number;
+    transaction_id: number;
+    user_id: number;
+    requested_days: number;
+    status: 'pending' | 'approved' | 'rejected';
+    processed_at?: string;
+    processed_by?: number;
+}
+
 export interface Transaction {
     id: number;
     user_id?: number;
@@ -70,6 +89,10 @@ export interface Transaction {
     borrowed_at: string;
     due_date: string;
     returned_at?: string;
+    fine_amount?: number;
+    fine_paid?: boolean;
+    extension_status?: 'pending' | 'approved' | 'rejected' | null;
+    requested_days?: number | null;
 }
 
 export interface PageProps {
@@ -92,16 +115,17 @@ export interface ToastMessage {
 }
 
 export interface DashboardStats {
-    // Admin/Librarian
     totalBooks?: number;
     availableBooks?: number;
     borrowedBooks?: number;
     totalStudents?: number;
+    totalLibrarians?: number;
     totalTransactions?: number;
     overdueBooks?: number;
     activeTransactions?: number;
-    // Member (student/staff)
+    recentTransactions?: number;
     myBorrowedBooks?: number;
     activeLoans?: number;
     returnedBooks?: number;
+    overdueBooks?: number;
 }
