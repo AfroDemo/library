@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { AlertTriangle, BookOpen, Folder, LayoutGrid, Locate, Timer, TimerReset, User } from 'lucide-react';
+import { AlertTriangle, BookOpen, Folder, LayoutGrid, Locate, Settings, Timer, TimerReset, User } from 'lucide-react';
 import AppLogo from './app-logo';
 
 import type { PageProps } from '@/types';
@@ -60,6 +60,11 @@ function getMainNavItems(role: string): NavItem[] {
                 title: 'Manage Locations',
                 href: '/admin/location',
                 icon: Locate,
+            },
+            {
+                title: 'Manage Settings',
+                href: '/admin/settings',
+                icon: Settings,
             },
         );
     }

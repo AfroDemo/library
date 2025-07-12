@@ -6,10 +6,19 @@ use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Transaction extends Model
 {
+    use HasFactory;
+
     protected $fillable = ['user_id', 'book_id', 'borrowed_at', 'due_date', 'returned_at'];
+
+    protected $casts = [
+        'borrowed_at' => 'datetime',
+        'due_date' => 'datetime',
+        'returned_at' => 'datetime',
+    ];
 
     public function user(): BelongsTo
     {
@@ -38,7 +47,7 @@ class Transaction extends Model
         }
 
         $daysOverdue = Carbon::today()->diffInDays($this->due_date);
-        $finePerDay = Setting::where('key', 'fine_per_day')->first()->value ?? 2.0;
-        return $daysOverdue * (float) $finePerDay;
+        $finePerDay = (float) Setting::getValue('overdue_fine_per_day', 2.0);
+        return $daysOverdue * $finePerDay;
     }
 }

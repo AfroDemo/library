@@ -8,4 +8,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command("apply-overdue")->everyFiveSeconds();
+Schedule::command("fines:apply-overdue")->everyFiveSeconds();

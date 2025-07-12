@@ -63,6 +63,8 @@ export default function LibrarianOverdue(props: OverduePageProps) {
         }
     };
 
+
+
     const sendReminders = (ids?: number[]) => {
         const transactionIds = ids || selectedTransactions;
         if (transactionIds.length === 0) {
@@ -116,6 +118,8 @@ export default function LibrarianOverdue(props: OverduePageProps) {
         const daysOverdue = getDaysOverdue(transaction.due_date);
         return total + Number.parseFloat(calculateFine(daysOverdue));
     }, 0);
+
+    console.log(overdueTransactions)
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

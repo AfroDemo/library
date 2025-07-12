@@ -1,7 +1,7 @@
 'use client';
 
 import { Head, router, usePage } from '@inertiajs/react';
-import { AlertTriangle, CheckCircle, Settings as SettingsIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, Settings as SettingsIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
 import type { PageProps, Settings, ToastMessage } from '../../types';
@@ -126,6 +126,10 @@ export default function SettingsPage() {
                                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 aria-label="Overdue fine per day"
                             />
+                            <p className="mt-1 flex items-center text-sm text-gray-500">
+                                <Info className="mr-1 h-4 w-4" />
+                                Changing this will update existing unpaid fines for overdue books overnight.
+                            </p>
                         </div>
                         <div className="flex justify-end">
                             <button

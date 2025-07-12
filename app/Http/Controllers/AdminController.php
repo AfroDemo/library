@@ -291,9 +291,9 @@ class AdminController extends Controller
     {
         $settings = Cache::remember('library_settings', 300, function () {
             return [
-                'loan_duration_days' => (int) (Setting::where('key', 'loan_duration_days')->first()->value ?? 14),
-                'max_books_per_user' => (int) (Setting::where('key', 'max_books_per_user')->first()->value ?? 5),
-                'overdue_fine_per_day' => (float) (Setting::where('key', 'overdue_fine_per_day')->first()->value ?? 2.00),
+                'loan_duration_days' => (int) Setting::getValue('loan_duration_days', 14),
+                'max_books_per_user' => (int) Setting::getValue('max_books_per_user', 5),
+                'overdue_fine_per_day' => (float) Setting::getValue('overdue_fine_per_day', 2.00),
             ];
         });
 
@@ -314,15 +314,15 @@ class AdminController extends Controller
 
         Setting::updateOrCreate(
             ['key' => 'loan_duration_days'],
-            ['value' => (int) $validated['loan_duration_days']]
+            ['value' => (string) $validated['loan_duration_days']]
         );
         Setting::updateOrCreate(
             ['key' => 'max_books_per_user'],
-            ['value' => (int) $validated['max_books_per_user']]
+            ['value' => (string) $validated['max_books_per_user']]
         );
         Setting::updateOrCreate(
             ['key' => 'overdue_fine_per_day'],
-            ['value' => (float) $validated['overdue_fine_per_day']]
+            ['value' => number_format((float) $validated['overdue_fine_per_day'], 2, '.', '')]
         );
 
         Cache::forget('library_settings');
