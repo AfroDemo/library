@@ -48,7 +48,7 @@ class Transaction extends Model
         }
 
         $overdueDays = Carbon::today()->diffInDays($this->due_date);
-        $finePerDay = config('library.overdue_fine_per_day', 1.00);
+        $finePerDay = config('library.overdue_fine_per_day', 2.00);
         return $overdueDays * $finePerDay;
     }
 }

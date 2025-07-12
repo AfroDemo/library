@@ -93,14 +93,15 @@ export interface Transaction {
     member_id?: string;
     student_name?: string;
     book_title: string;
-    book_isbn?: string;
+    book_isbn: string;
     borrowed_at: string;
     due_date: string;
-    returned_at?: string;
-    fine_amount?: number;
-    fine_paid?: boolean;
-    extension_status?: 'pending' | 'approved' | 'rejected' | null;
-    requested_days?: number | null;
+    returned_at?: string | null;
+    fine_amount: number | null;
+    fine_paid: boolean | null;
+    extension_status: 'pending' | 'approved' | 'rejected' | null;
+    requested_days: number | null;
+    extension_id: number | null;
 }
 
 export interface PageProps {
@@ -128,8 +129,8 @@ export interface DashboardStats {
     borrowedBooks?: number;
     totalStudents?: number;
     totalLibrarians?: number;
+    totalUsers?: number;
     totalTransactions?: number;
-    overdueBooks?: number;
     activeTransactions?: number;
     recentTransactions?: number;
     myBorrowedBooks?: number;
