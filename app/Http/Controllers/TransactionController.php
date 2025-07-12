@@ -397,7 +397,7 @@ class TransactionController extends Controller
             'status' => 'pending',
         ]);
 
-        return response()->json(['message' => 'Extension request submitted successfully']);
+        return redirect()->back()->with('success' , 'Extension request submitted successfully');
     }
 
     public function processExtensionRequest(Request $request, ExtensionRequest $extensionRequest)

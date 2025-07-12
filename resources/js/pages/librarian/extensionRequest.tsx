@@ -4,7 +4,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { AlertTriangle, BookOpen, CheckCircle, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AppLayout from '../../layouts/app-layout';
-import type { BreadcrumbItem, PageProps, ToastMessage } from '../../types';
+import type { PageProps, ToastMessage } from '../../types';
 
 interface ExtensionRequest {
     id: number;
@@ -25,8 +25,8 @@ interface ExtensionRequestsPageProps extends PageProps {
         data: ExtensionRequest[];
         current_page: number;
         last_page: number;
-        links: { url: string | null; label: string; active: boolean }[];
         total: number;
+        per_page: number;
     };
     filters: {
         search?: string;
@@ -34,7 +34,7 @@ interface ExtensionRequestsPageProps extends PageProps {
     };
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
+const breadcrumbs = [
     { title: 'Dashboard', href: '/dashboard' },
     { title: 'Extension Requests', href: '/librarian/extension-requests' },
 ];
@@ -70,8 +70,8 @@ export default function ExtensionRequests() {
         router.get(route('librarian.extension-requests'), { search, status }, { preserveState: true, replace: true });
     };
 
-    const handlePageChange = (url: string | null) => {
-        if (url) router.get(url, { search, status }, { preserveState: true });
+    const handlePageChange = (page: number) => {
+        router.get(route('librarian.extension-requests'), { search, status, page }, { preserveState: true, replace: true });
     };
 
     const openApproveModal = (request: ExtensionRequest) => {
@@ -105,6 +105,30 @@ export default function ExtensionRequests() {
             },
         );
     };
+
+    // Generate pagination links
+    const paginationLinks = [];
+    const currentPage = extensionRequests.current_page;
+    const lastPage = extensionRequests.last_page;
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(lastPage, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    if (currentPage > 1) {
+        paginationLinks.push({ label: 'Previous', page: currentPage - 1, active: false });
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        paginationLinks.push({ label: i.toString(), page: i, active: i === currentPage });
+    }
+
+    if (currentPage < lastPage) {
+        paginationLinks.push({ label: 'Next', page: currentPage + 1, active: false });
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -271,23 +295,19 @@ export default function ExtensionRequests() {
                     {/* Pagination */}
                     {extensionRequests.last_page > 1 && (
                         <div className="flex justify-center space-x-2 p-6">
-                            {extensionRequests.links.map((link, index) => (
+                            {paginationLinks.map((link, index) => (
                                 <button
                                     key={index}
-                                    onClick={() => handlePageChange(link.url)}
+                                    onClick={() => handlePageChange(link.page)}
                                     className={`rounded-lg px-4 py-2 ${
                                         link.active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                     } transition-colors`}
-                                    disabled={!link.url}
+                                    disabled={link.active}
                                     aria-label={
-                                        link.label === '« Previous'
-                                            ? 'Previous page'
-                                            : link.label === 'Next »'
-                                              ? 'Next page'
-                                              : `Go to page ${link.label}`
+                                        link.label === 'Previous' ? 'Previous page' : link.label === 'Next' ? 'Next page' : `Go to page ${link.label}`
                                     }
                                 >
-                                    {link.label === '« Previous' ? 'Previous' : link.label === 'Next »' ? 'Next' : link.label}
+                                    {link.label}
                                 </button>
                             ))}
                         </div>

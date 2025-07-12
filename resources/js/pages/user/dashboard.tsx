@@ -28,30 +28,6 @@ export default function UserDashboard() {
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
     const [requestedDays, setRequestedDays] = useState<number>(7);
 
-    useEffect(() => {
-        if (!initialStats.myBorrowedBooks) {
-            setIsLoading(true);
-            axios
-                .get('/api/user/stats')
-                .then((response) => {
-                    setStats(response.data);
-                    setIsLoading(false);
-                })
-                .catch((error) => {
-                    console.error('Failed to fetch stats:', error);
-                    showToast('error', 'Failed to load dashboard statistics');
-                    setIsLoading(false);
-                });
-        }
-
-        if (success) {
-            showToast('success', success);
-        }
-        if (errors && Object.values(errors).length > 0) {
-            Object.values(errors).forEach((error: any) => showToast('error', error));
-        }
-    }, [success, errors]);
-
     const showToast = (type: ToastMessage['type'], message: string) => {
         const id = Date.now().toString();
         const toast: ToastMessage = { type, message, id };
@@ -66,7 +42,7 @@ export default function UserDashboard() {
     };
 
     const openExtensionModal = (transaction: Transaction) => {
-        if (!transaction.returned_at && !transaction.extension_status) {
+        if (!transaction.returned_at && transaction.extension_status !== 'pending') {
             setSelectedTransaction(transaction);
             setRequestedDays(7);
             setIsExtensionModalOpen(true);
@@ -237,7 +213,7 @@ export default function UserDashboard() {
                                                             <span className="text-sm font-medium">Active</span>
                                                         </div>
                                                     )}
-                                                    {!transaction.returned_at && !transaction.extension_status && (
+                                                    {!transaction.returned_at && transaction.extension_status !== 'pending' && (
                                                         <button
                                                             onClick={() => openExtensionModal(transaction)}
                                                             className="flex items-center text-blue-600 hover:text-blue-900"
@@ -264,7 +240,7 @@ export default function UserDashboard() {
 
                 {/* Extension Request Modal */}
                 {isExtensionModalOpen && selectedTransaction && (
-                    <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                         <div className="w-full max-w-md rounded-lg bg-white p-6">
                             <h2 className="mb-4 text-xl font-bold text-gray-900">Request Extension</h2>
                             <div className="space-y-4">
@@ -334,7 +310,7 @@ export default function UserDashboard() {
                 </div>
 
                 {/* Toast Notifications */}
-                <div className="fixed right-4 bottom-4 z-50 space-y-2">
+                <div className="fixed bottom-4 right-4 z-50 space-y-2">
                     {toasts.map((toast) => (
                         <div
                             key={toast.id}

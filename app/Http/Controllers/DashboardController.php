@@ -94,7 +94,27 @@ class DashboardController extends Controller
                 'returnedBooks' => $returnedBooks,
             ];
 
-            $transactions = Transaction::where('user_id', $user->id)->orderByDesc('borrowed_at')->get();
+            $transactions = Transaction::where('user_id', $user->id)
+                ->with(['book', 'fines', 'extensionRequests'])
+                ->orderByDesc('borrowed_at')
+                ->get()
+                ->map(function ($t) {
+                    $fine = $t->fines()->latest()->first();
+                    $extensionRequest = $t->extensionRequests()->latest()->first();
+                    return [
+                        'id' => $t->id,
+                        'borrowed_at' => $t->borrowed_at->toDateTimeString(),
+                        'due_date' => $t->due_date->toDateTimeString(),
+                        'returned_at' => $t->returned_at?->toDateTimeString(),
+                        'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                        'book_isbn' => $t->book ? $t->book->isbn : 'N/A',
+                        'fine_amount' => $fine ? $fine->amount : $t->calculateFine(),
+                        'fine_paid' => $fine ? $fine->paid : false,
+                        'extension_status' => $extensionRequest ? $extensionRequest->status : null,
+                        'requested_days' => $extensionRequest ? $extensionRequest->requested_days : null,
+                        'extension_id' => $extensionRequest ? $extensionRequest->id : null,
+                    ];
+                });
 
             return Inertia::render('user/dashboard', [
                 'stats' => $stats,

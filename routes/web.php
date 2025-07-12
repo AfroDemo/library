@@ -21,7 +21,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/students/{member_id}', [TransactionController::class, 'getStudent']);
     Route::get('/books/{isbn}', [TransactionController::class, 'getBook']);
     Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
-    Route::post('/transactions/extension', [TransactionController::class, 'requestExtension']);
+    Route::post('/transactions/extension', [TransactionController::class, 'requestExtension'])->name('transactions.extension');
 
     Route::middleware(['role:librarian,admin'])->group(function () {
         Route::post('/dashboard/scan', [DashboardController::class, 'handleScan'])->name('librarian.scan');
@@ -51,11 +51,11 @@ Route::middleware(['auth'])->group(function () {
 
         // Transactions
         Route::get('/librarian/transactions', [TransactionController::class, 'index'])->name('librarian.transactions');
-        Route::post('/librarian/clearance', [DashboardController::class, 'checkClearance'])
-            ->name('librarian.clearance');
+        Route::post('/librarian/clearance', [DashboardController::class, 'checkClearance'])->name('librarian.clearance');
 
         // Extension Requests
         Route::get('/librarian/extension-requests', [TransactionController::class, 'extensionRequests'])->name('librarian.extension-requests');
+        Route::post('/transactions/extension/{extensionRequest}/process', [TransactionController::class, 'processExtensionRequest'])->name('transactions.extension.process');
     });
 
     Route::middleware(['role:admin'])->prefix('admin')->group(function () {
