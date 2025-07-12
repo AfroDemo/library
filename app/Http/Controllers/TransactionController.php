@@ -169,34 +169,6 @@ class TransactionController extends Controller
         ]);
     }
 
-    public function returnBook(Request $request, Transaction $transaction)
-    {
-        if ($transaction->returned_at) {
-            return response()->json(['error' => 'Book already returned'], 400);
-        }
-
-        $transaction->update([
-            'returned_at' => Carbon::now(),
-        ]);
-
-        $transaction->book->update(['available' => true]);
-
-        $fine = $transaction->calculateFine();
-        if ($fine > 0) {
-            Fine::create([
-                'transaction_id' => $transaction->id,
-                'user_id' => $transaction->user_id,
-                'amount' => $fine,
-                'paid' => false,
-            ]);
-        }
-
-        return response()->json([
-            'message' => 'Book returned successfully',
-            'transaction' => $transaction->load(['user', 'book', 'fines']),
-        ]);
-    }
-
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -255,6 +227,95 @@ class TransactionController extends Controller
         }
     }
 
+    public function returnBook(Request $request, Transaction $transaction)
+    {
+        if ($transaction->returned_at) {
+            return response()->json(['error' => 'Book already returned'], 400);
+        }
+
+        $transaction->update([
+            'returned_at' => Carbon::now(),
+        ]);
+
+        $transaction->book->update(['available' => true]);
+
+        if (!$transaction->fines()->exists()) {
+            $fine = $transaction->calculateFine();
+            if ($fine > 0) {
+                Fine::create([
+                    'transaction_id' => $transaction->id,
+                    'user_id' => $transaction->user_id,
+                    'amount' => $fine,
+                    'paid' => false,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Book returned successfully',
+            'transaction' => $transaction->load(['user', 'book', 'fines']),
+        ]);
+    }
+
+    public function processReturn(Request $request)
+    {
+        $request->validate([
+            'transaction_id' => 'required|integer|exists:transactions,id',
+        ]);
+        $transaction = Transaction::with('book')->findOrFail($request->transaction_id);
+        if ($transaction->returned_at) {
+            return redirect()->back()->withErrors(['transaction_id' => 'Book already returned.']);
+        }
+        $transaction->update([
+            'returned_at' => Carbon::now(),
+        ]);
+        if ($transaction->book) {
+            $transaction->book->update(['available' => true]);
+        }
+        if (!$transaction->fines()->exists()) {
+            $fine = $transaction->calculateFine();
+            if ($fine > 0) {
+                Fine::create([
+                    'transaction_id' => $transaction->id,
+                    'user_id' => $transaction->user_id,
+                    'amount' => $fine,
+                    'paid' => false,
+                ]);
+            }
+        }
+        return redirect()->route('librarian.returns')->with('success', 'Book returned successfully!');
+    }
+
+    public function sendOverdueReminders(Request $request)
+    {
+        $request->validate([
+            'transaction_ids' => 'required|array',
+            'transaction_ids.*' => 'integer|exists:transactions,id',
+        ]);
+        $transactions = Transaction::with(['user', 'book', 'fines'])->whereIn('id', $request->transaction_ids)->get();
+        foreach ($transactions as $t) {
+            if (!$t->fines()->exists()) {
+                $amount = $t->calculateFine();
+                if ($amount > 0) {
+                    Fine::create([
+                        'transaction_id' => $t->id,
+                        'user_id' => $t->user_id,
+                        'amount' => $amount,
+                        'paid' => false,
+                    ]);
+                }
+            }
+            Log::info('Reminder sent for overdue transaction', [
+                'transaction_id' => $t->id,
+                'student_email' => $t->user ? $t->user->email : 'N/A',
+                'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? 'N/A') : 'N/A',
+                'book_title' => $t->book ? $t->book->title : 'Unknown Book',
+                'fine_amount' => $t->fines()->latest()->first()?->amount ?? $t->calculateFine(),
+            ]);
+        }
+        return redirect()->route('librarian.overdue')->with('success', 'Reminders sent!');
+    }
+
     public function returnsPage(Request $request)
     {
         $activeTransactions = Transaction::with(['user.student', 'book', 'fines', 'extensionRequests'])
@@ -283,33 +344,6 @@ class TransactionController extends Controller
         return Inertia::render('librarian/returns', [
             'activeTransactions' => $activeTransactions,
         ]);
-    }
-
-    public function processReturn(Request $request)
-    {
-        $request->validate([
-            'transaction_id' => 'required|integer|exists:transactions,id',
-        ]);
-        $transaction = Transaction::with('book')->findOrFail($request->transaction_id);
-        if ($transaction->returned_at) {
-            return redirect()->back()->withErrors(['transaction_id' => 'Book already returned.']);
-        }
-        $transaction->update([
-            'returned_at' => Carbon::now(),
-        ]);
-        if ($transaction->book) {
-            $transaction->book->update(['available' => true]);
-        }
-        $fine = $transaction->calculateFine();
-        if ($fine > 0) {
-            Fine::create([
-                'transaction_id' => $transaction->id,
-                'user_id' => $transaction->user_id,
-                'amount' => $fine,
-                'paid' => false,
-            ]);
-        }
-        return redirect()->route('librarian.returns')->with('success', 'Book returned successfully!');
     }
 
     public function overduePage(Request $request)
@@ -345,35 +379,6 @@ class TransactionController extends Controller
         ]);
     }
 
-    public function sendOverdueReminders(Request $request)
-    {
-        $request->validate([
-            'transaction_ids' => 'required|array',
-            'transaction_ids.*' => 'integer|exists:transactions,id',
-        ]);
-        $transactions = Transaction::with(['user', 'book', 'fines'])->whereIn('id', $request->transaction_ids)->get();
-        foreach ($transactions as $t) {
-            $fine = $t->fines()->latest()->first();
-            $amount = $fine ? $fine->amount : $t->calculateFine();
-            if ($amount > 0 && !$fine) {
-                Fine::create([
-                    'transaction_id' => $t->id,
-                    'user_id' => $t->user_id,
-                    'amount' => $amount,
-                    'paid' => false,
-                ]);
-            }
-            Log::info('Reminder sent for overdue transaction', [
-                'transaction_id' => $t->id,
-                'student_email' => $t->user ? $t->user->email : 'N/A',
-                'student_phone' => $t->user && $t->user->student ? ($t->user->student->phone ?? 'N/A') : 'N/A',
-                'book_title' => $t->book ? $t->book->title : 'Unknown Book',
-                'fine_amount' => $amount,
-            ]);
-        }
-        return redirect()->route('librarian.overdue')->with('success', 'Reminders sent!');
-    }
-
     public function requestExtension(Request $request)
     {
         $request->validate([
@@ -397,7 +402,7 @@ class TransactionController extends Controller
             'status' => 'pending',
         ]);
 
-        return redirect()->back()->with('success' , 'Extension request submitted successfully');
+        return redirect()->back()->with('success', 'Extension request submitted successfully');
     }
 
     public function processExtensionRequest(Request $request, ExtensionRequest $extensionRequest)

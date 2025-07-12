@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class ApplyOverdueFines extends Command
 {
-    protected $signature = 'fines:apply-overdue';
+    protected $signature = 'apply-overdue';
     protected $description = 'Apply fines to overdue transactions that do not yet have a fine recorded';
 
     public function handle()

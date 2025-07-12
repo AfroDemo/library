@@ -138,3 +138,9 @@ export interface DashboardStats {
     returnedBooks?: number;
     overdueBooks?: number;
 }
+
+export interface Settings {
+    loan_duration_days: number;
+    max_books_per_user: number;
+    overdue_fine_per_day: number;
+}
