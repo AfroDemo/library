@@ -171,23 +171,33 @@ class AdminController extends Controller
             'member_id' => 'required_if:role,student|unique:students,member_id,' . ($user->student ? $user->student->id : null),
         ]);
 
-        $user->update([
+        // Prepare data for user update
+        $userData = [
             'name' => $validated['name'],
             'email' => $validated['email'],
             'role' => $validated['role'],
-            'password' => $validated['password'] ? bcrypt($validated['password']) : $user->password,
-        ]);
+        ];
+
+        // Only update password if it was provided in the request
+        if (isset($validated['password']) && !empty($validated['password'])) {
+            $userData['password'] = bcrypt($validated['password']);
+        }
+
+        $user->update($userData);
 
         if ($validated['role'] === 'student') {
             if ($user->student) {
+                // Update existing student record
                 $user->student->update(['member_id' => $validated['member_id']]);
             } else {
+                // Create new student record if the user becomes a student
                 Student::create([
                     'user_id' => $user->id,
                     'member_id' => $validated['member_id'],
                 ]);
             }
         } elseif ($user->student) {
+            // If the user was a student but is no longer, delete the student record
             $user->student->delete();
         }
 
