@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { AlertTriangle, BookOpen, Folder, LayoutGrid, Locate, TimerReset, User } from 'lucide-react';
+import { AlertTriangle, BookOpen, Folder, LayoutGrid, Locate, Timer, TimerReset, User } from 'lucide-react';
 import AppLogo from './app-logo';
 
 import type { PageProps } from '@/types';
@@ -38,7 +38,11 @@ function getMainNavItems(role: string): NavItem[] {
         );
     }
     if (role === 'librarian') {
-        items.push();
+        items.push({
+            title: 'Extension Request',
+            href: '/librarian/extension-requests',
+            icon: Timer,
+        });
     }
     if (role === 'admin') {
         items.push(

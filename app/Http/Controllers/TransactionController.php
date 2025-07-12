@@ -423,6 +423,57 @@ class TransactionController extends Controller
             ]);
         }
 
-        return redirect()->route('librarian.overdue')->with('success', 'Extension request processed successfully');
+        return redirect()->route('librarian.extension-requests')->with('success', 'Extension request processed successfully');
+    }
+
+    public function extensionRequests(Request $request)
+    {
+        $query = ExtensionRequest::with(['transaction.book', 'transaction.user.student', 'processedBy'])
+            ->orderBy('created_at', 'desc');
+
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('transaction.book', function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                        ->orWhere('isbn', 'like', "%{$search}%");
+                })->orWhereHas('transaction.user', function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%");
+                });
+            });
+        }
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $extensionRequests = $query->paginate(20)->through(function ($request) {
+            return [
+                'id' => $request->id,
+                'transaction_id' => $request->transaction_id,
+                'book_title' => $request->transaction && $request->transaction->book ? $request->transaction->book->title : 'Unknown Book',
+                'book_isbn' => $request->transaction && $request->transaction->book ? $request->transaction->book->isbn : 'N/A',
+                'student_name' => $request->transaction && $request->transaction->user ? $request->transaction->user->name : 'Unknown User',
+                'member_id' => $request->transaction && $request->transaction->user && $request->transaction->user->student ? $request->transaction->user->student->member_id : 'N/A',
+                'requested_days' => $request->requested_days,
+                'status' => $request->status,
+                'created_at' => $request->created_at->toDateTimeString(),
+                'processed_at' => $request->processed_at?->toDateTimeString(),
+                'processed_by' => $request->processedBy ? $request->processedBy->name : 'N/A',
+            ];
+        });
+
+        return Inertia::render('librarian/extensionRequest', [
+            'extensionRequests' => [
+                'data' => $extensionRequests->items(),
+                'current_page' => $extensionRequests->currentPage(),
+                'last_page' => $extensionRequests->lastPage(),
+                'total' => $extensionRequests->total(),
+                'per_page' => $extensionRequests->perPage(),
+            ],
+            'filters' => $request->only(['search', 'status']),
+            'success' => session('success', null),
+            'errors' => session('errors', []),
+        ]);
     }
 }
