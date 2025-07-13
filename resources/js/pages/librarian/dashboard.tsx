@@ -43,7 +43,6 @@ export default function LibrarianDashboard() {
     const [isClearanceModalOpen, setIsClearanceModalOpen] = useState(false);
     const [clearanceScanInput, setClearanceScanInput] = useState('');
     const [isClearanceScanning, setIsClearanceScanning] = useState(false);
-    const [clearanceCameraError, setClearanceCameraError] = useState<string | null>(null);
     const lastToastTimeRef = useRef<number>(0);
 
     const { data, setData, post, processing, reset } = useForm({
@@ -62,7 +61,6 @@ export default function LibrarianDashboard() {
     });
 
     const scannerRef = useRef<Html5Qrcode | null>(null);
-    const clearanceScannerRef = useRef<Html5Qrcode | null>(null);
     const scannerContainerRef = useRef<HTMLDivElement>(null);
     const clearanceScannerContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -75,10 +73,7 @@ export default function LibrarianDashboard() {
 
     useEffect(() => {
         setIsMobile(/mobile|android|iphone|ipad|tablet/i.test(navigator.userAgent.toLowerCase()));
-        if (initialScanStep !== 'confirm') {
-            if (!scannerRef.current) {
-                scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
-            }
+        if (initialScanStep !== 'confirm' || isClearanceModalOpen) {
             loadCameras();
         }
         if (initialScanStep !== 'confirm' && inputRef.current) {
@@ -95,18 +90,10 @@ export default function LibrarianDashboard() {
         }
         return () => {
             stopScanning();
-            stopClearanceScanning();
-            if (initialScanStep === 'confirm' && scannerRef.current) {
-                scannerRef.current = null;
-            }
         };
-    }, [success, errors, initialScanStep]);
+    }, [success, errors, initialScanStep, isClearanceModalOpen]);
 
     const loadCameras = async () => {
-        if (!scannerRef.current || !clearanceScannerRef.current) {
-            scannerRef.current = new Html5Qrcode('scanner-container', { verbose: true });
-            clearanceScannerRef.current = new Html5Qrcode('clearance-scanner-container', { verbose: true });
-        }
         try {
             const devices = await Html5Qrcode.getCameras();
             console.log('Available cameras:', devices);
@@ -126,12 +113,10 @@ export default function LibrarianDashboard() {
                 setSelectedCamera(rearCamera.id);
                 if (isMobile && devices.length === 1 && rearCamera.label?.toLowerCase().includes('front')) {
                     setCameraError('Only front camera detected. For best results, use the rear camera or manual input.');
-                    setClearanceCameraError('Only front camera detected. For best results, use the rear camera or manual input.');
                     showToast('info', 'Only front camera detected. Rear camera is recommended for scanning.');
                 }
             } else {
                 setCameraError('No camera found. Please connect a camera or use manual input.');
-                setClearanceCameraError('No camera found. Please connect a camera or use manual input.');
             }
         } catch (err: any) {
             console.error('Camera access error:', err.name, err.message);
@@ -143,9 +128,16 @@ export default function LibrarianDashboard() {
                 errorMessage = 'No camera found. Please connect a camera or use manual input.';
             }
             setCameraError(errorMessage);
-            setClearanceCameraError(errorMessage);
             showToast('error', errorMessage);
         }
+    };
+
+    const initializeScanner = (containerId: string) => {
+        if (scannerRef.current) {
+            stopScanning();
+            scannerRef.current = null;
+        }
+        scannerRef.current = new Html5Qrcode(containerId, { verbose: true });
     };
 
     const parseStudentId = (scannedText: string): string => {
@@ -154,13 +146,20 @@ export default function LibrarianDashboard() {
         return parts.length === 3 ? parts[1] : scannedText;
     };
 
-    const startScanning = async () => {
-        if (!scannerRef.current || !scannerContainerRef.current || !selectedCamera) {
+    const startScanning = async (isClearance: boolean = false) => {
+        const containerId = isClearance ? 'clearance-scanner-container' : 'scanner-container';
+        const containerRef = isClearance ? clearanceScannerContainerRef : scannerContainerRef;
+        if (!scannerRef.current || !containerRef.current || !selectedCamera) {
             setCameraError('No camera selected. Please select a camera or use manual input.');
             return;
         }
+
         try {
-            setIsScanning(true);
+            if (isClearance) {
+                setIsClearanceScanning(true);
+            } else {
+                setIsScanning(true);
+            }
             setCameraError(null);
             await scannerRef.current.start(
                 selectedCamera,
@@ -174,13 +173,19 @@ export default function LibrarianDashboard() {
                 },
                 (decodedText) => {
                     console.log('Scanned text:', decodedText);
-                    const input = initialScanStep === 'student' ? parseStudentId(decodedText) : decodedText;
-                    setScanInput(input);
-                    setData({
-                        scan_input: input,
-                        scan_step: initialScanStep,
-                    });
-                    handleScanSubmit({ preventDefault: () => {} } as React.FormEvent);
+                    const input = isClearance || initialScanStep === 'student' ? parseStudentId(decodedText) : decodedText;
+                    if (isClearance) {
+                        setClearanceScanInput(input);
+                        setClearanceData('member_id', input);
+                        handleClearanceSubmit({ preventDefault: () => {} } as React.FormEvent);
+                    } else {
+                        setScanInput(input);
+                        setData({
+                            scan_input: input,
+                            scan_step: initialScanStep,
+                        });
+                        handleScanSubmit({ preventDefault: () => {} } as React.FormEvent);
+                    }
                     stopScanning();
                 },
                 (errorMessage) => {
@@ -193,7 +198,7 @@ export default function LibrarianDashboard() {
                 },
             );
             setTimeout(() => {
-                if (isScanning) {
+                if ((isClearance && isClearanceScanning) || (!isClearance && isScanning)) {
                     stopScanning();
                     showToast('info', 'Scanning timed out. Please try again or use manual input.');
                 }
@@ -211,65 +216,11 @@ export default function LibrarianDashboard() {
             }
             setCameraError(errorMessage);
             showToast('error', errorMessage);
-            setIsScanning(false);
-        }
-    };
-
-    const startClearanceScanning = async () => {
-        if (!clearanceScannerRef.current || !clearanceScannerContainerRef.current || !selectedCamera) {
-            setClearanceCameraError('No camera selected. Please select a camera or use manual input.');
-            return;
-        }
-        try {
-            setIsClearanceScanning(true);
-            setClearanceCameraError(null);
-            await clearanceScannerRef.current.start(
-                selectedCamera,
-                {
-                    fps: 15,
-                    qrbox: { width: 300, height: 300 },
-                    aspectRatio: isMobile ? 1.777 : undefined,
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true,
-                    },
-                },
-                (decodedText) => {
-                    console.log('Clearance scan text:', decodedText);
-                    const studentId = parseStudentId(decodedText);
-                    setClearanceScanInput(studentId);
-                    setClearanceData('member_id', studentId);
-                    handleClearanceSubmit({ preventDefault: () => {} } as React.FormEvent);
-                    stopClearanceScanning();
-                },
-                (errorMessage) => {
-                    const now = Date.now();
-                    if (now - lastToastTimeRef.current >= 5000 && !errorMessage.includes('No QR code found')) {
-                        console.error('Clearance scanning error:', errorMessage);
-                        showToast('error', `Failed to detect code: ${errorMessage}. Please try again.`);
-                        lastToastTimeRef.current = now;
-                    }
-                },
-            );
-            setTimeout(() => {
-                if (isClearanceScanning) {
-                    stopClearanceScanning();
-                    showToast('info', 'Clearance scanning timed out. Please try again or use manual input.');
-                }
-            }, 15000);
-        } catch (error: any) {
-            console.error('Start clearance scanning error:', error.name, error.message);
-            let errorMessage = 'Failed to access camera. Please allow camera permissions or use manual input.';
-            if (error.name === 'NotAllowedError') {
-                errorMessage = 'Camera access denied. Please allow camera permissions in your browser settings.';
-                showPermissionInstructions();
-            } else if (error.name === 'NotFoundError') {
-                errorMessage = 'No camera found. Please connect a camera or use manual input.';
-            } else if (error.name === 'OverconstrainedError') {
-                errorMessage = 'Camera constraints not supported. Please select a different camera or use manual input.';
+            if (isClearance) {
+                setIsClearanceScanning(false);
+            } else {
+                setIsScanning(false);
             }
-            setClearanceCameraError(errorMessage);
-            showToast('error', errorMessage);
-            setIsClearanceScanning(false);
         }
     };
 
@@ -279,32 +230,25 @@ export default function LibrarianDashboard() {
                 .stop()
                 .then(() => {
                     setIsScanning(false);
+                    setIsClearanceScanning(false);
                 })
                 .catch((err) => {
                     console.error('Stop scanning error:', err);
                 });
         }
         setIsScanning(false);
-    };
-
-    const stopClearanceScanning = () => {
-        if (clearanceScannerRef.current && clearanceScannerRef.current.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
-            clearanceScannerRef.current
-                .stop()
-                .then(() => {
-                    setIsClearanceScanning(false);
-                })
-                .catch((err) => {
-                    console.error('Stop clearance scanning error:', err);
-                });
-        }
         setIsClearanceScanning(false);
     };
 
     useEffect(() => {
-        if (cameraError && inputRef.current && initialScanStep !== 'confirm') {
+        if (initialScanStep !== 'confirm' && !isClearanceModalOpen) {
+            initializeScanner('scanner-container');
+        } else if (isClearanceModalOpen) {
+            initializeScanner('clearance-scanner-container');
+        }
+        if (cameraError && inputRef.current && initialScanStep !== 'confirm' && !isClearanceModalOpen) {
             inputRef.current.focus();
-        } else if (inputRef.current && initialScanStep !== 'confirm') {
+        } else if (inputRef.current && initialScanStep !== 'confirm' && !isClearanceModalOpen) {
             inputRef.current.focus();
         }
         if (isClearanceModalOpen && clearanceInputRef.current) {
@@ -488,7 +432,7 @@ export default function LibrarianDashboard() {
 
     const closeClearanceModal = () => {
         setIsClearanceModalOpen(false);
-        stopClearanceScanning();
+        stopScanning();
         setClearanceStatus(null);
         setClearanceScanInput('');
         clearanceReset();
@@ -498,7 +442,7 @@ export default function LibrarianDashboard() {
         setClearanceStatus(null);
         setClearanceScanInput('');
         clearanceReset();
-        stopClearanceScanning();
+        stopScanning();
         if (clearanceInputRef.current) {
             clearanceInputRef.current.focus();
         }
@@ -641,9 +585,9 @@ export default function LibrarianDashboard() {
                                         <div className="flex space-x-3">
                                             <button
                                                 type="button"
-                                                onClick={isScanning ? stopScanning : startScanning}
+                                                onClick={() => startScanning(false)}
                                                 className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                                                disabled={processing || !selectedCamera}
+                                                disabled={processing || !selectedCamera || isClearanceModalOpen}
                                                 aria-label={isScanning ? 'Stop scanning' : 'Start scanning'}
                                             >
                                                 {isScanning ? 'Stop Scanning' : 'Start Scanning'}
@@ -924,9 +868,9 @@ export default function LibrarianDashboard() {
                                         <div
                                             className={`flex h-[${isMobile ? '40vh' : '250px'}] w-full items-center justify-center rounded-lg bg-gray-100`}
                                         >
-                                            {clearanceCameraError ? (
+                                            {cameraError ? (
                                                 <p className="px-4 text-center text-red-600" id="clearance-camera-error">
-                                                    {clearanceCameraError}
+                                                    {cameraError}
                                                 </p>
                                             ) : (
                                                 <p className="text-gray-500">Camera feed will appear here when scanning</p>
@@ -944,10 +888,10 @@ export default function LibrarianDashboard() {
                                                 setClearanceScanInput(e.target.value);
                                                 setClearanceData('member_id', e.target.value);
                                             }}
-                                            placeholder={clearanceCameraError ? 'Enter student ID manually...' : 'Scan or enter student ID...'}
+                                            placeholder={cameraError ? 'Enter student ID manually...' : 'Scan or enter student ID...'}
                                             className="w-full rounded-lg border border-gray-300 px-4 py-3 font-mono text-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                                             disabled={clearanceProcessing}
-                                            aria-describedby={clearanceCameraError ? 'clearance-camera-error' : undefined}
+                                            aria-describedby={cameraError ? 'clearance-camera-error' : undefined}
                                         />
                                         {clearanceProcessing && (
                                             <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
@@ -958,7 +902,7 @@ export default function LibrarianDashboard() {
                                     <div className="flex space-x-3">
                                         <button
                                             type="button"
-                                            onClick={isClearanceScanning ? stopClearanceScanning : startClearanceScanning}
+                                            onClick={() => startScanning(true)}
                                             className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                             disabled={clearanceProcessing || !selectedCamera}
                                             aria-label={isClearanceScanning ? 'Stop scanning' : 'Start scanning'}
