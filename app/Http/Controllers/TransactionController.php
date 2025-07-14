@@ -150,7 +150,9 @@ class TransactionController extends Controller
             return redirect()->route('dashboard')->withErrors(['scan_input' => 'Book is not available']);
         }
 
-        $loanDuration = Setting::where('key', 'loan_duration_days')->first()->value ?? 14;
+        // Fix: Cast the loan duration to integer
+        $loanDuration = (int)(Setting::where('key', 'loan_duration_days')->first()->value ?? 14);
+
         Transaction::create([
             'user_id' => $studentModel->user_id,
             'book_id' => $bookModel->id,
